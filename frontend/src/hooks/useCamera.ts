@@ -104,12 +104,17 @@ export function useCamera({
     }
   }, [active, facingMode, startCamera]);
 
+  // Keep a stable ref to startCamera so the mount effect doesn't re-fire
+  // every time facingMode changes (which would cause an infinite stop/restart loop).
+  const startCameraRef = useRef(startCamera);
+  useEffect(() => { startCameraRef.current = startCamera; });
+
   useEffect(() => {
     if (!active) return;
 
     const videoElement = videoRef.current;
     const timeoutId = window.setTimeout(() => {
-      void startCamera(preferredFacingMode);
+      void startCameraRef.current(preferredFacingMode);
     }, 0);
 
     return () => {
@@ -121,7 +126,8 @@ export function useCamera({
         videoElement.srcObject = null;
       }
     };
-  }, [active, preferredFacingMode, startCamera]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, preferredFacingMode]);
 
   return {
     videoRef,

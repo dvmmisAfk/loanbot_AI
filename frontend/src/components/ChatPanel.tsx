@@ -208,11 +208,23 @@ export default function ChatPanel({
           <ApprovalScreen loanData={loanData} pdfReady={pdfReady} pdfFilename={pdfFilename} />
         )}
 
+        {/* VideoKYC lives in the scrollable area so the full component is reachable */}
+        {needsVideoKyc && (
+          <div className="px-4 pb-6 pt-2">
+            <VideoKYC
+              sessionId={sessionId}
+              loading={loading}
+              userName={loanData.name}
+              onSubmit={onVideoKycUpload}
+            />
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </div>
 
-      {/* ── Input bar (hidden when done) ── */}
-      {!isDone && (
+      {/* ── Input bar (hidden when done or doing video KYC) ── */}
+      {!isDone && !needsVideoKyc && (
         <div
           className="shrink-0 px-6 py-4"
           style={{
@@ -220,15 +232,7 @@ export default function ChatPanel({
             borderTop: '1px solid rgba(255,255,255,0.08)',
           }}
         >
-          {needsVideoKyc ? (
-            <VideoKYC
-              sessionId={sessionId}
-              loading={loading}
-              userName={loanData.name}
-              onSubmit={onVideoKycUpload}
-            />
-          ) : (
-            <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit}>
               <div
                 className="flex items-center gap-3 px-4 py-3"
                 style={{
@@ -250,14 +254,12 @@ export default function ChatPanel({
                     fontStyle: interimText && !input ? 'italic' : 'normal',
                   }}
                 />
-
                 <VoiceButton
                   onTranscript={handleVoiceTranscript}
                   onListeningChange={setIsVoiceActive}
                   disabled={loading || isDone}
                   className="shrink-0"
                 />
-
                 <button
                   type="submit"
                   disabled={!input.trim() || loading || isVoiceActive}
@@ -271,7 +273,6 @@ export default function ChatPanel({
                 </button>
               </div>
             </form>
-          )}
 
           {/* Encryption note */}
           <p

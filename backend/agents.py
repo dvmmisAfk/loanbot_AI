@@ -279,29 +279,26 @@ def sales_agent(state: LoanState) -> LoanState:
 # Transitions to: credit
 # ─────────────────────────────────────
 
-KYC_PROMPT = """You are Priya, a professional KYC verification
-officer at QuickLoan NBFC. You are thorough but friendly.
+KYC_PROMPT = """You are Priya, a professional KYC verification officer at QuickLoan NBFC.
 
 YOUR ONLY JOB: Collect and validate 3 identity details:
 1. full_name — exactly as on Aadhaar card
-2. aadhaar — 12 digit number (accept with or without dashes)
+2. aadhaar — 12 digit number (accept with or without dashes/spaces)
 3. pan — PAN card number (format: 5 LETTERS + 4 DIGITS + 1 LETTER)
 
-COLLECTION ORDER: Always collect in this order:
-- First ask for full name
-- Then ask for Aadhaar number
-- Then ask for PAN number
+COLLECTION ORDER: name first, then aadhaar, then pan.
 
-VALIDATION RULES:
-- Name: Must be at least 2 words, letters only
-- Aadhaar: Must be exactly 12 digits (ignore dashes/spaces)
-- PAN: Must match pattern ABCDE1234F (5 letters, 4 digits, 1 letter)
-- If format is wrong, explain gently and ask again
-- Mask Aadhaar in your reply: show only last 4 digits
+AADHAAR VALIDATION — READ CAREFULLY:
+- Strip ALL spaces and dashes first, then count ONLY digits
+- Example: "9876 5432 1123" → strip → "987654321123" → 12 digits → VALID ✓
+- Example: "987654321123" → already 12 digits → VALID ✓
+- Example: "934958671234" → 12 digits → VALID ✓
+- ONLY reject if the digit count (after stripping) is NOT exactly 12
+- Do NOT reject a number just because it "looks wrong" — count digits precisely
 
-TONE: Professional but warm. Assure them data is safe and encrypted.
-Match their language — Hindi, English, or Hinglish.
-Never rush them. One thing at a time.
+PAN VALIDATION:
+- Exactly 10 characters: 5 letters + 4 digits + 1 letter
+- Example: ABCDE1234F → VALID ✓
 
 WHEN ALL 3 COLLECTED AND VALID, respond ONLY with this JSON:
 {
@@ -312,13 +309,58 @@ WHEN ALL 3 COLLECTED AND VALID, respond ONLY with this JSON:
   "message": "your warm verification success message"
 }
 
-WHEN STILL COLLECTING, respond ONLY with this JSON:
+WHEN STILL COLLECTING, respond ONLY with this JSON (include already-collected values):
 {
   "done": false,
-  "message": "your next question or gentle correction"
+  "name": "Rahul Sharma or null",
+  "aadhaar": "digits collected so far or null",
+  "pan": "pan collected so far or null",
+  "message": "your next question"
 }
 
 CRITICAL: Response must be pure JSON only. No text before or after."""
+
+
+def _extract_kyc_from_messages(messages: list) -> dict:
+    """
+    Scan conversation history for Aadhaar (12 digits), PAN, and name
+    directly from user messages. Used as a fallback when the small LLM
+    fails to extract or validate them correctly.
+    """
+    found: dict = {}
+    prev_assistant = ""
+
+    for msg in messages:
+        role = msg.get("role")
+        text = msg.get("content", "")
+
+        if role == "assistant":
+            prev_assistant = text.lower()
+            continue
+
+        if role != "user":
+            continue
+
+        # ── Aadhaar: 12 consecutive digits (allow spaces/dashes between groups) ──
+        aadhaar_match = re.search(r'\b(\d[\d\s\-]{10,16}\d)\b', text)
+        if aadhaar_match:
+            candidate = re.sub(r'[\s\-]', '', aadhaar_match.group(1))
+            if len(candidate) == 12 and candidate.isdigit():
+                found["aadhaar"] = candidate
+
+        # ── PAN: 5 letters + 4 digits + 1 letter ──
+        pan_match = re.search(r'\b([A-Za-z]{5}[0-9]{4}[A-Za-z])\b', text)
+        if pan_match:
+            found["pan"] = pan_match.group(1).upper()
+
+        # ── Name: user reply to a "name" question — 2-4 alphabetic words ──
+        if "name" in prev_assistant and not found.get("name"):
+            words = text.strip().split()
+            if (2 <= len(words) <= 5
+                    and all(re.match(r'^[A-Za-z]+$', w) for w in words)):
+                found["name"] = text.strip().title()
+
+    return found
 
 
 def kyc_agent(state: LoanState) -> LoanState:
@@ -328,17 +370,33 @@ def kyc_agent(state: LoanState) -> LoanState:
 
         reply = data.get("message", "Please share your full name.")
 
+        # ── Regex fallback: patch any values the LLM missed or mis-validated ──
+        extracted = _extract_kyc_from_messages(state["messages"])
+        if not data.get("aadhaar") and extracted.get("aadhaar"):
+            data["aadhaar"] = extracted["aadhaar"]
+        if not data.get("pan") and extracted.get("pan"):
+            data["pan"] = extracted["pan"]
+        if not data.get("name") and (extracted.get("name") or state.get("name")):
+            data["name"] = extracted.get("name") or state.get("name", "")
+        # Also fix: LLM sometimes returns aadhaar with spaces — strip it
+        if data.get("aadhaar"):
+            data["aadhaar"] = re.sub(r'[\s\-]', '', str(data["aadhaar"]))
+
+        # If LLM said done=false but we now have all three fields, promote to done
+        has_name    = bool(data.get("name"))
+        has_aadhaar = bool(data.get("aadhaar"))
+        has_pan     = bool(data.get("pan"))
+        if not data.get("done") and has_name and has_aadhaar and has_pan:
+            data["done"] = True
+
         if data.get("done"):
             name = data.get("name", "").strip()
             aadhaar = re.sub(r'[\s-]', '', data.get("aadhaar", "")).strip()
             pan = data.get("pan", "").upper().strip()
 
-            # Validate name: at least 2 words, letters only (+ spaces)
+            # Validate name: 2-3 words (hardcoded simple check)
             name_words = name.split()
-            name_valid = (
-                len(name_words) >= 2 
-                and all(re.match(r'^[a-zA-Z]+$', word) for word in name_words)
-            )
+            name_valid = len(name_words) >= 2 and len(name_words) <= 3
             
             # Validate Aadhaar: exactly 12 digits
             aadhaar_valid = len(aadhaar) == 12 and aadhaar.isdigit()

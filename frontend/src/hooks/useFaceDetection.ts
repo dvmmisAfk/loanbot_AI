@@ -74,9 +74,9 @@ async function getFaceLandmarker() {
         },
         runningMode: 'VIDEO',
         numFaces: 2,
-        minFaceDetectionConfidence: 0.55,
-        minFacePresenceConfidence: 0.55,
-        minTrackingConfidence: 0.55,
+        minFaceDetectionConfidence: 0.3,
+        minFacePresenceConfidence: 0.3,
+        minTrackingConfidence: 0.3,
         outputFaceBlendshapes: true,
       }),
     );
@@ -204,7 +204,7 @@ export function useFaceDetection(videoRef: RefObject<HTMLVideoElement | null>, a
               brightness,
               centered: false,
               stable: false,
-              lightingGood: brightness >= 80,
+              lightingGood: brightness >= 60,
               faceArea: 0,
               yaw: 0,
               pitch: 0,
@@ -227,9 +227,9 @@ export function useFaceDetection(videoRef: RefObject<HTMLVideoElement | null>, a
           const faceArea = faceBox.width * faceBox.height;
           const centerX = faceBox.x + (faceBox.width / 2);
           const centerY = faceBox.y + (faceBox.height / 2);
-          const centered = Math.abs(centerX - 0.5) <= 0.1 && Math.abs(centerY - 0.47) <= 0.12;
-          const lightingGood = brightness >= 82;
-          const distanceGood = faceArea >= 0.075 && faceArea <= 0.34;
+          const centered = Math.abs(centerX - 0.5) <= 0.18 && Math.abs(centerY - 0.47) <= 0.2;
+          const lightingGood = brightness >= 60;
+          const distanceGood = faceArea >= 0.04 && faceArea <= 0.45;
 
           historyRef.current.push({ x: centerX, y: centerY, area: faceArea });
           if (historyRef.current.length > 16) {
@@ -292,10 +292,10 @@ export function useFaceDetection(videoRef: RefObject<HTMLVideoElement | null>, a
             actionStateRef.current.turn_side = true;
           }
 
-          if (poseHistoryRef.current.length >= 8) {
+          if (poseHistoryRef.current.length >= 6) {
             const pitchValues = poseHistoryRef.current.map((sample) => sample.pitch);
             const pitchRange = Math.max(...pitchValues) - Math.min(...pitchValues);
-            if (pitchRange > 0.09) {
+            if (pitchRange > 0.05) {
               actionStateRef.current.nod = true;
             }
           }
@@ -304,10 +304,10 @@ export function useFaceDetection(videoRef: RefObject<HTMLVideoElement | null>, a
           if (!lightingGood) {
             qualityIssues.push('Increase lighting around your face.');
           }
-          if (faceArea < 0.075) {
+          if (faceArea < 0.04) {
             qualityIssues.push('Move closer to the camera.');
           }
-          if (faceArea > 0.34) {
+          if (faceArea > 0.45) {
             qualityIssues.push('Move slightly back so your full face stays visible.');
           }
           if (!centered) {
