@@ -4,9 +4,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+client = None
 
 MODEL = "llama-3.3-70b-versatile"
+
+
+def get_client() -> Groq:
+    """Initialize Groq client lazily so non-LLM flows can run without API setup."""
+    global client
+    if client is None:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise RuntimeError("GROQ_API_KEY is not set.")
+        client = Groq(api_key=api_key)
+    return client
 
 def call_groq(system_prompt: str, messages: list) -> str:
     """
@@ -23,7 +34,7 @@ def call_groq(system_prompt: str, messages: list) -> str:
             "content": msg["content"]
         })
 
-    response = client.chat.completions.create(
+    response = get_client().chat.completions.create(
         model=MODEL,
         messages=formatted_messages,
         temperature=0.3,
@@ -56,7 +67,7 @@ CRITICAL RULES:
             "content": msg["content"]
         })
 
-    response = client.chat.completions.create(
+    response = get_client().chat.completions.create(
         model=MODEL,
         messages=formatted_messages,
         temperature=0.1,

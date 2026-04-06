@@ -1,1 +1,68 @@
 @import "tailwindcss";
+
+@theme {
+  --color-primary: #F1F5F9;
+  --color-secondary: #C4D4E4;
+  --color-success: #4ADE80;
+  --color-accent-blue: #22D3EE;
+  --color-accent-purple: #A78BFA;
+  --color-fintech-navy: #0D1628;
+  --color-dark-base: #060D1A;
+  --color-atm-body: #1E293B;
+  --color-atm-reflection: #334155;
+  --color-rupee-glow: #4ADE80;
+}
+
+@layer utilities {
+  .text-glow-green {
+    text-shadow: 0 0 14px rgba(74, 222, 128, 0.8);
+  }
+}
+
+@layer base {
+  body {
+    background-color: var(--color-fintech-navy);
+    color: var(--color-primary);
+    font-family: 'Inter', system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* ── Chat UI Animations ── */
+
+@keyframes spin-gauge {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.75); }
+}
+
+@keyframes float-up {
+  0%   { opacity: 1; transform: translateY(0)   rotate(0deg); }
+  100% { opacity: 0; transform: translateY(-80px) rotate(360deg); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes stamp-in {
+  0%   { opacity: 0; transform: rotate(-3deg) scale(0.7); }
+  60%  { transform: rotate(-3deg) scale(1.08); }
+  100% { opacity: 1; transform: rotate(-3deg) scale(1); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 25px rgba(74,222,128,0.4); }
+  50%       { box-shadow: 0 0 55px rgba(74,222,128,0.85); }
+}
+
+.animate-spin-gauge   { animation: spin-gauge   1s linear infinite; }
+.animate-pulse-dot    { animation: pulse-dot    1.2s ease-in-out infinite; }
+.animate-slide-up     { animation: slide-up     0.25s ease both; }
+.animate-stamp-in     { animation: stamp-in     0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.animate-glow-pulse   { animation: glow-pulse   2s ease-in-out infinite; }
