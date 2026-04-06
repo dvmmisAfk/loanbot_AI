@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { motion, useScroll } from 'framer-motion';
 import HeroCanvasAnimation from './HeroCanvasAnimation';
 import { ArrowRight, ChevronDown } from 'lucide-react';
+import LoanBotLogo from './LoanBotLogo';
 
 export default function Hero({ onApply }: { onApply: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,6 +35,10 @@ export default function Hero({ onApply }: { onApply: () => void }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
             >
+              <div className="mb-8">
+                <LoanBotLogo iconSize={58} wordmarkSize={38} />
+              </div>
+
               {/* Status badge */}
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 mb-6 backdrop-blur-md">
                 <span className="w-2 h-2 rounded-full bg-[var(--color-success)] shadow-[0_0_8px_var(--color-success)] animate-pulse" />

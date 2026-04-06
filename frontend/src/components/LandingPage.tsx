@@ -5,6 +5,7 @@ import BeforeAfter from './BeforeAfter';
 import ProductCards from './ProductCards';
 import FinalCTA from './FinalCTA';
 import TechStack from './TechStack';
+import LoanBotLogo from './LoanBotLogo';
 
 interface Props {
   onApply: () => void;
@@ -38,15 +39,7 @@ export default function LandingPage({ onApply }: Props) {
           transition: 'transform 0.4s ease, opacity 0.4s ease',
         }}
       >
-        <div className="flex items-center gap-2 font-['Poppins'] font-bold text-xl tracking-tight text-white">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm"
-            style={{ background: 'linear-gradient(135deg, #b8ff4f, #4ADE80)', color: '#0B1120', boxShadow: '0 0 12px rgba(184,255,79,0.5)' }}
-          >
-            L
-          </div>
-          LoanBot AI
-        </div>
+        <LoanBotLogo iconSize={38} wordmarkSize={24} />
 
         <div className="hidden md:flex gap-8 text-sm font-medium" style={{ color: '#8892a4' }}>
           <a href="#" className="hover:text-white transition-colors">How It Works</a>

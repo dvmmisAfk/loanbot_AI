@@ -4,6 +4,7 @@ import type { ChatMessage, LoanData } from '../types';
 import MessageBubble from './MessageBubble';
 import CreditLoadingCard from './CreditLoadingCard';
 import ApprovalScreen from './ApprovalScreen';
+import LoanBotLogo from './LoanBotLogo';
 
 interface Props {
   messages: ChatMessage[];
@@ -68,15 +69,9 @@ export default function ChatPanel({
         }}
       >
         {/* Avatar */}
-        <div
-          className="w-12 h-12 rounded-full flex items-center justify-center text-base font-bold shrink-0"
-          style={{ background: '#1a2235', color: '#6d5ce7', border: '2px solid rgba(109,92,231,0.3)' }}
-        >
-          LB
-        </div>
         <div>
-          <p className="text-base font-semibold text-white leading-none">LoanBot AI</p>
-          <p className="text-xs mt-0.5" style={{ color: '#b8ff4f' }}>Typically replies instantly</p>
+          <LoanBotLogo iconSize={36} wordmarkSize={24} />
+          <p className="text-xs mt-1 ml-[50px]" style={{ color: '#b8ff4f' }}>Typically replies instantly</p>
         </div>
       </div>
 

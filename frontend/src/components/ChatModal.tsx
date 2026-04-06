@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Download, Loader2, MessageSquare } from 'lucide-react';
+import { X, Send, Download, Loader2 } from 'lucide-react';
+import LoanBotLogo from './LoanBotLogo';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -158,13 +159,10 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[var(--color-dark-base)]/50">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--color-success)] to-[var(--color-accent-blue)] flex items-center justify-center shadow-[0_0_12px_rgba(34,197,94,0.4)]">
-                  <MessageSquare className="w-4 h-4 text-white" />
-                </div>
+              <div>
+                <LoanBotLogo iconSize={34} wordmarkSize={22} />
                 <div>
-                  <h2 className="font-semibold text-white text-sm">LoanBot AI</h2>
-                  <p className="text-xs text-[var(--color-secondary)]">{subtitle}</p>
+                  <p className="text-xs text-[var(--color-secondary)] mt-1 ml-[46px]">{subtitle}</p>
                 </div>
               </div>
               <button
