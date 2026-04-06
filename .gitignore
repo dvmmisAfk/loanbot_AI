@@ -1,0 +1,25 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/pdfs/
+__pycache__/
+*.pyc
+*.pyo
+
+# Secrets — never commit
+backend/.env
+.env
+
+# Node
+frontend/node_modules/
+
+# Build output
+frontend/dist/
+
+# Claude config
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
