@@ -329,14 +329,24 @@ def kyc_agent(state: LoanState) -> LoanState:
         reply = data.get("message", "Please share your full name.")
 
         if data.get("done"):
-            name = data.get("name", "")
-            aadhaar = re.sub(r'[\s-]', '', data.get("aadhaar", ""))
+            name = data.get("name", "").strip()
+            aadhaar = re.sub(r'[\s-]', '', data.get("aadhaar", "")).strip()
             pan = data.get("pan", "").upper().strip()
 
+            # Validate name: at least 2 words, letters only (+ spaces)
+            name_words = name.split()
+            name_valid = (
+                len(name_words) >= 2 
+                and all(re.match(r'^[a-zA-Z]+$', word) for word in name_words)
+            )
+            
+            # Validate Aadhaar: exactly 12 digits
             aadhaar_valid = len(aadhaar) == 12 and aadhaar.isdigit()
+            
+            # Validate PAN: 5 letters + 4 digits + 1 letter
             pan_valid = bool(re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]$', pan))
 
-            if aadhaar_valid and pan_valid and len(name) > 2:
+            if name_valid and aadhaar_valid and pan_valid:
                 state["name"] = name
                 state["user_name"] = name
                 state["aadhaar"] = aadhaar
@@ -372,9 +382,19 @@ def kyc_agent(state: LoanState) -> LoanState:
                     "content": verified_msg
                 })
             else:
+                # Provide specific feedback on what failed
+                validation_errors = []
+                if not name_valid:
+                    validation_errors.append("name must have at least 2 words with only letters")
+                if not aadhaar_valid:
+                    validation_errors.append("Aadhaar must be exactly 12 digits")
+                if not pan_valid:
+                    validation_errors.append("PAN must be in format: 5 letters + 4 digits + 1 letter (e.g., ABCDE1234F)")
+                
+                error_msg = "I found an issue: " + ", ".join(validation_errors) + ". Please correct this and try again."
                 state["messages"].append({
                     "role": "assistant",
-                    "content": "Let me re-verify your details. " + reply
+                    "content": error_msg
                 })
         else:
             state["messages"].append({
