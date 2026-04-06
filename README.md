@@ -41,6 +41,35 @@ Groq Cloud LLM / ReportLab PDF / State Management
 
 ## 🔧 Installation
 
+### Windows Quick Start
+
+1. Open the project in **PowerShell** or **Command Prompt**.
+2. Create a backend environment file:
+   ```powershell
+   Set-Content -Path backend\.env -Value "GROQ_API_KEY=your_groq_api_key_here"
+   ```
+3. Install backend dependencies:
+   ```powershell
+   cd backend
+   py -m pip install -r requirements.txt
+   ```
+4. Install frontend dependencies:
+   ```powershell
+   cd ..\frontend
+   npm install
+   ```
+5. Start the backend:
+   ```powershell
+   cd ..\backend
+   py -m uvicorn main:app --host 127.0.0.1 --port 8002
+   ```
+6. Start the frontend in a second terminal:
+   ```powershell
+   cd frontend
+   npm run dev
+   ```
+7. Open the app at `http://127.0.0.1:5173`.
+
 ### Backend Setup
 
 1. Navigate to the backend directory:
@@ -89,6 +118,12 @@ Create a `backend/.env` file (already in `.gitignore`):
 GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
+Windows PowerShell alternative:
+
+```powershell
+Set-Content -Path backend\.env -Value "GROQ_API_KEY=your_groq_api_key_here"
+```
+
 ## 🎯 Usage
 
 ### Running the Full Pipeline
@@ -120,10 +155,40 @@ cd backend
 python test_setup.py
 ```
 
+Windows:
+
+```powershell
+cd backend
+py test_setup.py
+```
+
 Verifies:
 - ✅ State module loads correctly
 - ✅ Groq API connection works
 - ✅ JSON mode responses parse correctly
+
+### Running the Full App
+
+Backend:
+
+```bash
+cd backend
+uvicorn main:app --host 127.0.0.1 --port 8002
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Windows backend command:
+
+```powershell
+cd backend
+py -m uvicorn main:app --host 127.0.0.1 --port 8002
+```
 
 ## 📁 Project Structure
 
