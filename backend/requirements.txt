@@ -6,3 +6,12 @@ python-dotenv
 reportlab
 python-dateutil
 websockets
+python-multipart
+numpy
+pillow
+opencv-python
+torch
+torchvision
+facenet-pytorch
+mediapipe
+pytesseract

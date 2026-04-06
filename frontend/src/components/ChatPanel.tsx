@@ -13,7 +13,9 @@ interface Props {
   loanData: LoanData;
   pdfReady: boolean;
   pdfFilename: string | null;
+  sessionId: string;
   onSend: (text: string) => void;
+  onVideoKycUpload: (aadhaarImage: File, liveVideo: File) => void;
 }
 
 export default function ChatPanel({
@@ -23,12 +25,17 @@ export default function ChatPanel({
   loanData,
   pdfReady,
   pdfFilename,
+  sessionId,
   onSend,
+  onVideoKycUpload,
 }: Props) {
   const [input, setInput] = useState('');
+  const [aadhaarImage, setAadhaarImage] = useState<File | null>(null);
+  const [liveVideo, setLiveVideo] = useState<File | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLInputElement>(null);
   const isDone    = currentStep === 'done';
+  const needsVideoKyc = currentStep === 'video_kyc';
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -53,6 +60,12 @@ export default function ChatPanel({
     if (!input.trim() || loading || isDone) return;
     onSend(input.trim());
     setInput('');
+  }
+
+  function handleVideoKycSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!aadhaarImage || !liveVideo || loading) return;
+    onVideoKycUpload(aadhaarImage, liveVideo);
   }
 
   return (
@@ -123,47 +136,97 @@ export default function ChatPanel({
             borderTop: '1px solid rgba(255,255,255,0.08)',
           }}
         >
-          <form onSubmit={handleSubmit}>
-            <div
-              className="flex items-center gap-3 px-4 py-3"
-              style={{
-                background: '#141B2D',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '50px',
-              }}
-            >
+          {needsVideoKyc ? (
+            <form onSubmit={handleVideoKycSubmit} className="space-y-3">
+              <div
+                className="rounded-3xl p-4 space-y-3"
+                style={{ background: '#141B2D', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                <div>
+                  <p className="text-sm font-semibold text-white">Upload documents for video eKYC</p>
+                  <p className="text-xs mt-1" style={{ color: '#8892a4' }}>
+                    Session: {sessionId.slice(0, 8)}...
+                  </p>
+                </div>
 
-              {/* Text input */}
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                placeholder="Type in Hindi or English..."
-                disabled={loading}
-                className="flex-1 bg-transparent border-none outline-none text-sm text-white"
-                style={{ color: '#ffffff' }}
-              />
+                <label className="block text-sm" style={{ color: '#d7deea' }}>
+                  Aadhaar image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => setAadhaarImage(e.target.files?.[0] ?? null)}
+                    disabled={loading}
+                    className="mt-2 block w-full text-sm"
+                  />
+                </label>
 
-              {/* Mic icon */}
-              <Mic className="w-5 h-5 shrink-0" style={{ color: '#8892a4' }} />
+                <label className="block text-sm" style={{ color: '#d7deea' }}>
+                  Selfie video
+                  <input
+                    type="file"
+                    accept="video/*"
+                    onChange={e => setLiveVideo(e.target.files?.[0] ?? null)}
+                    disabled={loading}
+                    className="mt-2 block w-full text-sm"
+                  />
+                </label>
 
-              {/* Send button */}
-              <button
-                type="submit"
-                disabled={!input.trim() || loading}
-                className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 disabled:cursor-not-allowed"
+                <button
+                  type="submit"
+                  disabled={!aadhaarImage || !liveVideo || loading}
+                  className="w-full rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed"
+                  style={{
+                    background: aadhaarImage && liveVideo && !loading ? '#b8ff4f' : '#1a2235',
+                    color: aadhaarImage && liveVideo && !loading ? '#0B1120' : '#4a5568',
+                  }}
+                >
+                  Upload and run video eKYC
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <div
+                className="flex items-center gap-3 px-4 py-3"
                 style={{
-                  background: input.trim() && !loading ? '#b8ff4f' : '#1a2235',
+                  background: '#141B2D',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '50px',
                 }}
               >
-                <Send
-                  className="w-4 h-4"
-                  style={{ color: input.trim() && !loading ? '#0B1120' : '#4a5568' }}
+
+                {/* Text input */}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder="Type in Hindi or English..."
+                  disabled={loading}
+                  className="flex-1 bg-transparent border-none outline-none text-sm text-white"
+                  style={{ color: '#ffffff' }}
                 />
-              </button>
-            </div>
-          </form>
+
+                {/* Mic icon */}
+                <Mic className="w-5 h-5 shrink-0" style={{ color: '#8892a4' }} />
+
+                {/* Send button */}
+                <button
+                  type="submit"
+                  disabled={!input.trim() || loading}
+                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 disabled:cursor-not-allowed"
+                  style={{
+                    background: input.trim() && !loading ? '#b8ff4f' : '#1a2235',
+                  }}
+                >
+                  <Send
+                    className="w-4 h-4"
+                    style={{ color: input.trim() && !loading ? '#0B1120' : '#4a5568' }}
+                  />
+                </button>
+              </div>
+            </form>
+          )}
 
           {/* Encryption note */}
           <p

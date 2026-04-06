@@ -95,7 +95,7 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
     } catch {
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: 'Connection error. Please make sure the backend is running on port 8000.' },
+        { role: 'assistant', content: 'Connection error. Please make sure the backend is running on port 8002.' },
       ]);
     } finally {
       setLoading(false);

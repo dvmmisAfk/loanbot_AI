@@ -20,6 +20,7 @@ function getActiveIndex(step: string): number {
     case 'greeting': return 0;
     case 'sales':    return 1;
     case 'kyc':      return 2;
+    case 'video_kyc': return 2;
     case 'credit':   return 3;
     case 'sanction':
     case 'done':     return 4;
@@ -203,10 +204,12 @@ export default function ChatSidebar({ currentStep, loanData }: Props) {
             </div>
           )}
 
-          {currentStep === 'kyc' && (
+          {(currentStep === 'kyc' || currentStep === 'video_kyc') && (
             <div className="flex items-center gap-2" style={{ color: '#8892a4' }}>
               <RefreshCw className="w-4 h-4 animate-spin" />
-              <span className="text-[13px]">KYC in progress...</span>
+              <span className="text-[13px]">
+                {currentStep === 'video_kyc' ? 'Waiting for video eKYC upload...' : 'KYC in progress...'}
+              </span>
             </div>
           )}
         </div>

@@ -85,7 +85,54 @@ export default function ChatPage({ onBack }: Props) {
         {
           id:        genId(),
           role:      'assistant',
-          content:   '⚠️ Connection error. Make sure the backend is running on port 8000.',
+          content:   '⚠️ Connection error. Make sure the backend is running on port 8002.',
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendVideoKyc(aadhaarImage: File, liveVideo: File) {
+    if (loading) return;
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('aadhaar_image', aadhaarImage);
+      formData.append('live_video', liveVideo);
+
+      const res = await fetch(`/api/video-kyc/${sessionIdRef.current}`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error('Video KYC failed');
+
+      const data = await res.json();
+      const msgText: string = data.message ?? 'Video eKYC processed.';
+
+      sessionIdRef.current = data.session_id ?? sessionIdRef.current;
+      setCurrentStep(data.current_step ?? 'video_kyc');
+      setPdfReady(data.pdf_ready ?? false);
+      setPdfFilename(data.pdf_filename ?? null);
+      setLoanData(prev => parseLoanData(msgText, prev));
+
+      const botMsg: ChatMessage = {
+        id: genId(),
+        role: 'assistant',
+        content: msgText,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, botMsg]);
+    } catch {
+      setMessages(prev => [
+        ...prev,
+        {
+          id: genId(),
+          role: 'assistant',
+          content: '⚠️ Video eKYC upload failed. Please retry with a clear Aadhaar image and a short selfie video.',
           timestamp: new Date(),
         },
       ]);
@@ -117,7 +164,9 @@ export default function ChatPage({ onBack }: Props) {
         loanData={loanData}
         pdfReady={pdfReady}
         pdfFilename={pdfFilename}
+        sessionId={sessionIdRef.current}
         onSend={text => sendMessage(text)}
+        onVideoKycUpload={sendVideoKyc}
       />
     </div>
   );

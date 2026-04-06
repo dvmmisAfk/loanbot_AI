@@ -1,10 +1,20 @@
 from langgraph.graph import StateGraph, END
 from state import LoanState
 from agents import sales_agent, kyc_agent, credit_agent, sanction_agent
+from video_kyc_agent import video_kyc_agent
 
 
 def after_kyc_router(state: LoanState) -> str:
-    """After KYC runs: if verified, chain straight to credit; else wait for user."""
+    """After KYC runs: route into video eKYC once assets are ready."""
+    if state.get("current_step") == "video_kyc":
+        return "video_kyc_agent"
+    if state.get("current_step") == "credit":
+        return "credit_agent"
+    return END
+
+
+def after_video_kyc_router(state: LoanState) -> str:
+    """Only verified video KYC applications can proceed to credit."""
     if state.get("current_step") == "credit":
         return "credit_agent"
     return END
@@ -22,6 +32,8 @@ def entry_router(state: LoanState) -> str:
         return "sales_agent"
     elif step == "kyc":
         return "kyc_agent"
+    elif step == "video_kyc":
+        return "video_kyc_agent"
     elif step == "credit":
         return "credit_agent"
     elif step == "sanction":
@@ -35,6 +47,7 @@ def build_pipeline():
 
     graph.add_node("sales_agent", sales_agent)
     graph.add_node("kyc_agent", kyc_agent)
+    graph.add_node("video_kyc_agent", video_kyc_agent)
     graph.add_node("credit_agent", credit_agent)
     graph.add_node("sanction_agent", sanction_agent)
 
@@ -43,6 +56,7 @@ def build_pipeline():
         {
             "sales_agent": "sales_agent",
             "kyc_agent": "kyc_agent",
+            "video_kyc_agent": "video_kyc_agent",
             "credit_agent": "credit_agent",
             "sanction_agent": "sanction_agent",
             END: END
@@ -54,6 +68,12 @@ def build_pipeline():
 
     # KYC: if verified → chain to credit automatically, else wait
     graph.add_conditional_edges("kyc_agent", after_kyc_router, {
+        "video_kyc_agent": "video_kyc_agent",
+        "credit_agent": "credit_agent",
+        END: END
+    })
+
+    graph.add_conditional_edges("video_kyc_agent", after_video_kyc_router, {
         "credit_agent": "credit_agent",
         END: END
     })

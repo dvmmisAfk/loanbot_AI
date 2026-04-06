@@ -165,18 +165,30 @@ def kyc_agent(state: LoanState) -> LoanState:
 
             if aadhaar_valid and pan_valid and len(name) > 2:
                 state["name"] = name
+                state["user_name"] = name
                 state["aadhaar"] = aadhaar
                 state["pan"] = pan
-                state["kyc_status"] = "VERIFIED"
-                state["current_step"] = "credit"
+                has_video_inputs = bool(state.get("aadhaar_image")) and bool(state.get("video_frames"))
+
+                if has_video_inputs:
+                    state["current_step"] = "video_kyc"
+                    state["kyc_status"] = "PENDING_VIDEO_KYC"
+                    next_step_msg = "Running your video eKYC verification now..."
+                else:
+                    state["current_step"] = "video_kyc"
+                    state["kyc_status"] = "PENDING_VIDEO_KYC"
+                    next_step_msg = (
+                        "Please upload your Aadhaar image and a short selfie video "
+                        "to continue with video eKYC."
+                    )
 
                 verified_msg = (
                     f"{reply}\n\n"
-                    f"✅ KYC Status: VERIFIED\n"
+                    f"✅ Document KYC Captured\n"
                     f"• Name: {name}\n"
                     f"• Aadhaar: XXXX-XXXX-{aadhaar[-4:]}\n"
                     f"• PAN: {pan[:3]}XXXXXXX\n\n"
-                    f"Running your credit check now..."
+                    f"{next_step_msg}"
                 )
                 state["messages"].append({
                     "role": "assistant",
