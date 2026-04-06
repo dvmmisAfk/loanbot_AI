@@ -1,3 +1,4 @@
+from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm, mm
@@ -5,11 +6,14 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table,
-    TableStyle, HRFlowable, KeepTogether
+    TableStyle, HRFlowable, KeepTogether, Image as RLImage
 )
 from datetime import date, timedelta
 import calendar
 import os
+from PIL import Image as PILImage
+
+from financials import calculate_loan_to_income, calculate_npa_risk, get_score_band
 
 
 # ── Brand colors ─────────────────────────────────────
@@ -24,15 +28,16 @@ GRAY_LIGHT  = colors.HexColor('#f0f0f0')
 GRAY_BG     = colors.HexColor('#f8f9fa')
 WHITE       = colors.white
 AMBER       = colors.HexColor('#f59e0b')
+RISK_RED    = colors.HexColor('#ef4444')
 
 
 def fmt_inr(amount):
-    """Format number as Indian currency: 300000 → Rs. 3,00,000"""
+    """Format number as Indian currency: 300000 → ₹3,00,000"""
     try:
         amount = int(amount)
         s = str(amount)
         if len(s) <= 3:
-            return f"Rs. {s}"
+            return f"₹{s}"
         last3 = s[-3:]
         rest = s[:-3]
         groups = []
@@ -42,9 +47,9 @@ def fmt_inr(amount):
         if rest:
             groups.append(rest)
         groups.reverse()
-        return f"Rs. {','.join(groups)},{last3}"
+        return f"₹{','.join(groups)},{last3}"
     except Exception:
-        return f"Rs. {amount}"
+        return f"₹{amount}"
 
 
 def mask_aadhaar(aadhaar):
@@ -65,6 +70,30 @@ def add_months(dt, months):
     return dt.replace(year=year, month=month, day=day)
 
 
+def build_signature_image(signature_image, max_width, max_height):
+    if not signature_image:
+        return None
+
+    try:
+        with PILImage.open(BytesIO(signature_image)) as image:
+            normalized = image.convert("RGBA")
+            white_bg = PILImage.new("RGBA", normalized.size, (255, 255, 255, 255))
+            white_bg.alpha_composite(normalized)
+            flattened = white_bg.convert("RGB")
+
+            width, height = flattened.size
+            if width <= 0 or height <= 0:
+                return None
+
+            scale = min(max_width / width, max_height / height, 1.0)
+            output = BytesIO()
+            flattened.save(output, format="PNG")
+            output.seek(0)
+            return RLImage(output, width=width * scale, height=height * scale)
+    except Exception:
+        return None
+
+
 def generate_pdf(state: dict, path: str) -> str:
     os.makedirs(os.path.dirname(path) if os.path.dirname(path) else '.', exist_ok=True)
 
@@ -79,13 +108,27 @@ def generate_pdf(state: dict, path: str) -> str:
     kyc_status  = state.get('kyc_status', 'VERIFIED')
     aadhaar     = state.get('aadhaar', '')
     pan         = state.get('pan', '')
+    signature_image = state.get('signature_image')
     today       = date.today()
     maturity    = add_months(today, tenure)
     total_pay   = emi * tenure
     total_int   = total_pay - loan_amount
-    emi_ratio   = round((emi / income * 100), 1) if income else 0
+    emi_ratio   = float(state.get('emi_ratio', round((emi / income * 100), 1) if income else 0))
+    loan_to_income = float(state.get('loan_to_income') or calculate_loan_to_income(loan_amount, income))
+    remaining_income = income - emi
+    npa_risk = state.get('npa_risk') or calculate_npa_risk(cibil, emi_ratio)
+    approval_reasoning = state.get('approval_reasoning') or "Affordability and income stability supported the decision."
+    top_reason = approval_reasoning.split(" | ")[0] if approval_reasoning else "AI affordability and credit fit"
+    score_band = get_score_band(cibil)
+    if emi_ratio <= 40:
+        affordability = "Within Safe Limits ✓"
+    elif emi_ratio <= 50:
+        affordability = "Above Recommended ⚠"
+    else:
+        affordability = "High EMI Burden ✕"
     ref_no      = f"QL/{name[:2].upper()}/{today.strftime('%Y%m%d')}/{str(loan_amount)[-4:]}"
     status_color = SUCCESS if loan_status == 'APPROVED' else AMBER
+    npa_color = SUCCESS if npa_risk == 'LOW' else AMBER if npa_risk == 'MEDIUM' else RISK_RED
 
     # ── Document ──────────────────────────────────────
     doc = SimpleDocTemplate(
@@ -255,17 +298,21 @@ def generate_pdf(state: dict, path: str) -> str:
 
     borrower_rows = [
         [sec_hdr("BORROWER & KYC DETAILS", PURPLE), ""],
-        ["Full Name",       name],
-        ["Aadhaar Number",  mask_aadhaar(aadhaar)],
-        ["PAN Number",      mask_pan(pan)],
-        ["Monthly Income",  fmt_inr(income)],
-        ["Employment",      "Salaried / Self-Employed"],
-        ["KYC Status",      f"{kyc_status} (Verified)"],
-        ["CIBIL Score",     f"{cibil} — Good Standing"],
-        ["EMI/Income",      f"{emi_ratio}%"],
-        ["Eligibility",     "ELIGIBLE"],
-        ["Loan Status",     loan_status],
+        ["Full Name",            name],
+        ["Aadhaar Number",       mask_aadhaar(aadhaar)],
+        ["PAN Number",           mask_pan(pan)],
+        ["Monthly Income",       fmt_inr(income)],
+        ["Employment",           "Salaried / Self-Employed"],
+        ["KYC Status",           f"{kyc_status} (Verified)"],
+        ["CIBIL Score",          f"{cibil} — {score_band.title()}"],
+        ["EMI / Income Ratio",   f"{emi_ratio:.1f}% (RBI limit: 50%)"],
+        ["Loan-to-Income",       f"{loan_to_income:.1f}x annual income"],
+        ["Income After EMI",     f"{fmt_inr(remaining_income)}/month"],
+        ["NPA Risk Assessment",  npa_risk],
+        ["Affordability",        affordability],
+        ["Loan Status",          loan_status],
     ]
+    borrower_idx = {row[0]: index for index, row in enumerate(borrower_rows) if index > 0}
     borrower_table = Table(borrower_rows, colWidths=[LW * 0.52, LW * 0.48])
     borrower_table.setStyle(TableStyle([
         ('BACKGROUND',     (0, 0), (-1, 0),   PURPLE),
@@ -283,12 +330,16 @@ def generate_pdf(state: dict, path: str) -> str:
         ('FONTNAME',       (0, 1), (0, -1),   'Helvetica-Bold'),
         ('ALIGNMENT',      (1, 1), (1, -1),   'RIGHT'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1),  [WHITE, GRAY_BG]),
-        ('TEXTCOLOR',      (1, 6), (1, 6),    SUCCESS),
-        ('FONTNAME',       (1, 6), (1, 6),    'Helvetica-Bold'),
-        ('TEXTCOLOR',      (1, 7), (1, 7),    SUCCESS),
-        ('FONTNAME',       (1, 7), (1, 7),    'Helvetica-Bold'),
-        ('TEXTCOLOR',      (1, 10), (1, 10),  status_color),
-        ('FONTNAME',       (1, 10), (1, 10),  'Helvetica-Bold'),
+        ('TEXTCOLOR',      (1, borrower_idx["KYC Status"]), (1, borrower_idx["KYC Status"]), SUCCESS),
+        ('FONTNAME',       (1, borrower_idx["KYC Status"]), (1, borrower_idx["KYC Status"]), 'Helvetica-Bold'),
+        ('TEXTCOLOR',      (1, borrower_idx["CIBIL Score"]), (1, borrower_idx["CIBIL Score"]), SUCCESS if cibil >= 700 else AMBER),
+        ('FONTNAME',       (1, borrower_idx["CIBIL Score"]), (1, borrower_idx["CIBIL Score"]), 'Helvetica-Bold'),
+        ('TEXTCOLOR',      (1, borrower_idx["NPA Risk Assessment"]), (1, borrower_idx["NPA Risk Assessment"]), npa_color),
+        ('FONTNAME',       (1, borrower_idx["NPA Risk Assessment"]), (1, borrower_idx["NPA Risk Assessment"]), 'Helvetica-Bold'),
+        ('TEXTCOLOR',      (1, borrower_idx["Affordability"]), (1, borrower_idx["Affordability"]), SUCCESS if emi_ratio <= 40 else AMBER if emi_ratio <= 50 else RISK_RED),
+        ('FONTNAME',       (1, borrower_idx["Affordability"]), (1, borrower_idx["Affordability"]), 'Helvetica-Bold'),
+        ('TEXTCOLOR',      (1, borrower_idx["Loan Status"]), (1, borrower_idx["Loan Status"]), status_color),
+        ('FONTNAME',       (1, borrower_idx["Loan Status"]), (1, borrower_idx["Loan Status"]), 'Helvetica-Bold'),
         ('GRID',           (0, 1), (-1, -1),  0.5, colors.HexColor('#e2e8f0')),
         ('BOX',            (0, 0), (-1, -1),  1, PURPLE),
     ]))
@@ -308,25 +359,78 @@ def generate_pdf(state: dict, path: str) -> str:
     story.append(Spacer(1, 6))
 
     # ══════════════════════════════════════════════════
-    # BLOCK 5 — CIBIL SCORE BAR
+    # BLOCK 5 — CREDIT ANALYSIS SUMMARY
+    # ══════════════════════════════════════════════════
+    story.append(Paragraph("CREDIT ANALYSIS SUMMARY", S['sec']))
+    story.append(Paragraph(
+        "This loan was evaluated using an AI-powered credit scoring model aligned with RBI "
+        "Digital Lending Guidelines 2023-24. The model analyzed payment capacity (30% net "
+        "income rule), credit utilization proxy (loan-to-income ratio), and EMI affordability. "
+        f"The final CIBIL-equivalent score of {cibil} places this applicant in the "
+        f"{score_band} category.",
+        S['body']
+    ))
+    story.append(Spacer(1, 4))
+
+    def analysis_cell(label, value, width):
+        cell = Table([
+            [Paragraph(label, ps(f"label_{label[:4]}", fontSize=6.8, fontName='Helvetica-Bold', textColor=PURPLE, leading=9))],
+            [Paragraph(value, ps(f"value_{label[:4]}", fontSize=8.2, fontName='Helvetica-Bold', textColor=NAVY, leading=11))],
+        ], colWidths=[width])
+        cell.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), WHITE),
+            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#d6d9ef')),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        return cell
+
+    emi_burden_label = "Safe Zone" if emi_ratio <= 40 else "Elevated" if emi_ratio <= 50 else "High Risk"
+    cell_width = (W - 8) / 2
+    analysis_grid = Table([
+        [
+            analysis_cell("Score Band", score_band, cell_width),
+            analysis_cell("Key Factor", top_reason, cell_width),
+        ],
+        [
+            analysis_cell("EMI Burden", f"{emi_ratio:.1f}% — {emi_burden_label}", cell_width),
+            analysis_cell("Loan Validity", "30 days from sanction date", cell_width),
+        ],
+    ], colWidths=[cell_width, cell_width], rowHeights=[None, None])
+    analysis_grid.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    story.append(analysis_grid)
+    story.append(Spacer(1, 4))
+
+    # ══════════════════════════════════════════════════
+    # BLOCK 6 — CIBIL SCORE BAR
     # ══════════════════════════════════════════════════
     score_ranges = [
-        ("300-549", "POOR",      colors.HexColor('#ef4444')),
-        ("550-649", "FAIR",      colors.HexColor('#f59e0b')),
-        ("650-749", "GOOD",      colors.HexColor('#22c55e')),
-        ("750-900", "EXCELLENT", colors.HexColor('#15803d')),
+        ("300-549", "VERY POOR", colors.HexColor('#ef4444')),
+        ("550-649", "POOR",      colors.HexColor('#f59e0b')),
+        ("650-699", "FAIR",      colors.HexColor('#facc15')),
+        ("700-749", "GOOD",      colors.HexColor('#84cc16')),
+        ("750-900", "EXCELLENT", colors.HexColor('#22c55e')),
     ]
 
     def in_range(label):
         return (
-            (label == "POOR"      and cibil < 550) or
-            (label == "FAIR"      and 550 <= cibil <= 649) or
-            (label == "GOOD"      and 650 <= cibil <= 749) or
+            (label == "VERY POOR" and cibil < 550) or
+            (label == "POOR"      and 550 <= cibil <= 649) or
+            (label == "FAIR"      and 650 <= cibil <= 699) or
+            (label == "GOOD"      and 700 <= cibil <= 749) or
             (label == "EXCELLENT" and cibil >= 750)
         )
 
     score_cells = []
-    bg_colors   = []
+    bg_colors = []
     for rng, label, color in score_ranges:
         active = in_range(label)
         txt = f"<b>{rng}</b><br/>{label}" + (" ◀ YOURS" if active else "")
@@ -337,23 +441,24 @@ def generate_pdf(state: dict, path: str) -> str:
         )))
         bg_colors.append(color if active else colors.HexColor('#f0f0f0'))
 
+    score_col_width = W * 0.16
     score_table = Table(
-        [[Paragraph(f"<b>CIBIL Score: {cibil}</b>",
-                    ps('csl', fontSize=8, fontName='Helvetica-Bold',
-                       textColor=NAVY))] + score_cells],
-        colWidths=[W * 0.2] + [W * 0.2] * 4
+        [[Paragraph(
+            f"<b>CIBIL Score: {cibil}</b>",
+            ps('csl', fontSize=8, fontName='Helvetica-Bold', textColor=NAVY)
+        )] + score_cells],
+        colWidths=[W * 0.2] + [score_col_width] * len(score_ranges)
     )
-    score_table.setStyle(TableStyle([
-        ('BACKGROUND',    (1, 0), (1, 0), bg_colors[0]),
-        ('BACKGROUND',    (2, 0), (2, 0), bg_colors[1]),
-        ('BACKGROUND',    (3, 0), (3, 0), bg_colors[2]),
-        ('BACKGROUND',    (4, 0), (4, 0), bg_colors[3]),
+    score_styles = [
         ('TOPPADDING',    (0, 0), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
         ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
         ('BOX',           (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
         ('GRID',          (1, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-    ]))
+    ]
+    for index, bg_color in enumerate(bg_colors, start=1):
+        score_styles.append(('BACKGROUND', (index, 0), (index, 0), bg_color))
+    score_table.setStyle(TableStyle(score_styles))
     story.append(score_table)
     story.append(Spacer(1, 6))
 
@@ -403,17 +508,26 @@ def generate_pdf(state: dict, path: str) -> str:
     sig_b  = ps('sigb', fontSize=7.5, fontName='Helvetica-Bold',
                 textColor=NAVY, alignment=TA_CENTER, leading=11)
 
-    def sig_cell(line1, line2, line3, col_w):
-        return Table([
-            [Paragraph("_" * 28, sig_s)],
+    def sig_cell(line1, line2, line3, col_w, signature_flowable=None):
+        rows = []
+        if signature_flowable is not None:
+            rows.append([signature_flowable])
+            rows.append([Spacer(1, 2)])
+        else:
+            rows.append([Paragraph("_" * 28, sig_s)])
+
+        rows.extend([
             [Paragraph(line1, sig_b)],
             [Paragraph(line2, sig_s)],
             [Paragraph(line3, sig_s)],
-        ], colWidths=[col_w])
+        ])
+        return Table(rows, colWidths=[col_w])
+
+    borrower_signature = build_signature_image(signature_image, W * 0.24, 18 * mm)
 
     sig_table = Table([[
         sig_cell("Borrower Signature", name,
-                 f"Date: {today.strftime('%d/%m/%Y')}", W * 0.33),
+                 f"Date: {today.strftime('%d/%m/%Y')}", W * 0.33, borrower_signature),
         sig_cell("Branch Manager", "QuickLoan NBFC",
                  "(Authorized Signatory)", W * 0.33),
         sig_cell("Chief Credit Officer", "QuickLoan NBFC",

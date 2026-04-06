@@ -1,7 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Download, Loader2 } from 'lucide-react';
 import LoanBotLogo from './LoanBotLogo';
+import { API_BASE_URL, apiUrl } from '../lib/api';
+import { VoiceButton } from './VoiceButton';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -26,6 +29,7 @@ const STEP_LABELS = ['Loan Info', 'KYC', 'Credit', 'Sanction', 'Complete'];
 const STEPS = ['sales', 'kyc', 'credit', 'sanction', 'done'];
 
 export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -36,13 +40,22 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
   const [started, setStarted] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sendMessageRef = useRef<((text: string) => Promise<void>) | null>(null);
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
+
+  const handleVoiceTranscript = useCallback((text: string) => {
+    if (!loading && currentStep !== 'done' && text.trim()) {
+      void sendMessageRef.current?.(text.trim());
+    }
+  }, [loading, currentStep]);
+
 
   useEffect(() => {
     if (isOpen && !started) {
-      sendMessage('Hello');
+      void sendMessageRef.current?.('Hello');
       setStarted(true);
     }
-  }, [isOpen]);
+  }, [isOpen, started]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -74,7 +87,7 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch(apiUrl('/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, message: text }),
@@ -83,26 +96,36 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
       if (!res.ok) throw new Error('Network error');
 
       const data = await res.json();
+      const assistantMessages: string[] = data.messages?.length
+        ? data.messages
+        : data.message
+        ? [data.message]
+        : [];
 
       setSessionId(data.session_id);
       setCurrentStep(data.current_step || 'greeting');
       setPdfReady(data.pdf_ready);
       setPdfFilename(data.pdf_filename);
 
-      if (data.message) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+      if (assistantMessages.length) {
+        setMessages(prev => [
+          ...prev,
+          ...assistantMessages.map((content) => ({ role: 'assistant' as const, content })),
+        ]);
       }
     } catch {
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: 'Connection error. Please make sure the backend is running on port 8002.' },
+        { role: 'assistant', content: `Connection error. Please make sure the LoanBot API is running on ${API_BASE_URL}.` },
       ]);
     } finally {
       setLoading(false);
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  sendMessageRef.current = sendMessage;
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     sendMessage(input);
   }
@@ -110,7 +133,7 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
   function handleDownload() {
     if (!pdfFilename) return;
     const link = document.createElement('a');
-    link.href = `/api/download/${pdfFilename}`;
+    link.href = apiUrl(`/download/${encodeURIComponent(pdfFilename)}`);
     link.download = pdfFilename;
     link.click();
   }
@@ -160,7 +183,7 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[var(--color-dark-base)]/50">
               <div>
-                <LoanBotLogo iconSize={34} wordmarkSize={22} />
+                <LoanBotLogo iconSize={34} wordmarkSize={22} onClick={() => navigate('/')} />
                 <div>
                   <p className="text-xs text-[var(--color-secondary)] mt-1 ml-[46px]">{subtitle}</p>
                 </div>
@@ -278,17 +301,19 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
                   type="text"
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  placeholder={
-                    currentStep === 'done'
-                      ? 'Your loan journey is complete ✓'
-                      : 'Tell LoanBot what you need...'
-                  }
+                  placeholder={currentStep === 'done' ? 'Your loan journey is complete ✓' : 'Tell LoanBot what you need...'}
                   disabled={loading || currentStep === 'done'}
-                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-[var(--color-primary)] placeholder-[var(--color-secondary)] focus:outline-none focus:border-[var(--color-accent-blue)]/50 transition-all disabled:opacity-50"
+                  className="flex-1 bg-white/5 border rounded-xl px-4 py-3 text-sm placeholder-[var(--color-secondary)] focus:outline-none transition-all disabled:opacity-50"
+                  style={{ borderColor: 'rgba(255,255,255,0.1)', color: 'var(--color-primary)' }}
+                />
+                <VoiceButton
+                  onTranscript={handleVoiceTranscript}
+                  onListeningChange={setIsVoiceActive}
+                  disabled={loading || currentStep === 'done'}
                 />
                 <button
                   type="submit"
-                  disabled={!input.trim() || loading || currentStep === 'done'}
+                  disabled={!input.trim() || loading || currentStep === 'done' || isVoiceActive}
                   className="p-3 bg-[var(--color-accent-blue)] rounded-xl text-white hover:scale-105 active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_12px_rgba(56,189,248,0.3)]"
                 >
                   <Send className="w-4 h-4" />

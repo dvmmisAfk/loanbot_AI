@@ -4,6 +4,8 @@ import ChatSidebar from './ChatSidebar';
 import ChatPanel from './ChatPanel';
 import type { ChatMessage, LoanData } from '../types';
 import { parseLoanData } from '../types';
+import { API_BASE_URL, apiUrl } from '../lib/api';
+import type { VideoKycCaptureMeta } from './VideoKYC';
 
 interface Props {
   onBack: () => void;
@@ -13,23 +15,48 @@ function genId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-// Module-level guard — survives Strict Mode's double-invocation of effects
-let _greetingSent = false;
-
 export default function ChatPage({ onBack }: Props) {
   const [messages,    setMessages]    = useState<ChatMessage[]>([]);
-  const sessionIdRef  = useRef<string>(genId());
+  const sessionIdRef   = useRef<string>(genId());
   const [currentStep, setCurrentStep] = useState('greeting');
   const [loanData,    setLoanData]    = useState<LoanData>({});
+  const savedDoneRef   = useRef(false);
+  const greetingSentRef = useRef(false);
   const [loading,     setLoading]     = useState(false);
   const [pdfReady,    setPdfReady]    = useState(false);
   const [pdfFilename, setPdfFilename] = useState<string | null>(null);
+  const sendMessageRef = useRef<((text: string, isGreeting?: boolean) => Promise<void>) | null>(null);
 
-  // Auto-greet on mount — guard prevents double-fire in React Strict Mode
+  // Save loan data to localStorage when step reaches "done"
   useEffect(() => {
-    if (_greetingSent) return;
-    _greetingSent = true;
-    sendMessage('Hello', true);
+    if (currentStep !== 'done' || savedDoneRef.current) return;
+    savedDoneRef.current = true;
+    localStorage.setItem('loanbot_session_id', sessionIdRef.current);
+    localStorage.setItem('loanbot_loan_data', JSON.stringify({
+      name: loanData.name,
+      loan_amount: loanData.loan_amount,
+      income: loanData.income,
+      emi: loanData.emi,
+      emi_ratio: loanData.emi_ratio,
+      tenure: loanData.tenure,
+      cibil_score: loanData.cibil_score,
+      loan_status: loanData.loan_status,
+      risk_factors: loanData.risk_factors,
+      npa_risk: loanData.npa_risk,
+      approval_reasoning: loanData.approval_reasoning,
+      loan_to_income: loanData.loan_to_income,
+      pdf_filename: pdfFilename,
+      session_id: sessionIdRef.current,
+      approved_at: new Date().toISOString(),
+    }));
+  }, [currentStep, loanData, pdfFilename]);
+
+  // Auto-greet on mount — useRef guard prevents double-fire in React Strict Mode
+  // and resets each time ChatPage is freshly mounted (unlike a module-level flag)
+  useEffect(() => {
+    if (greetingSentRef.current) return;
+    greetingSentRef.current = true;
+    void sendMessageRef.current?.('Hello', true);
   }, []);
 
   async function sendMessage(text: string, isGreeting = false) {
@@ -46,7 +73,7 @@ export default function ChatPage({ onBack }: Props) {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch(apiUrl('/chat'), {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ session_id: sessionIdRef.current, message: text }),
@@ -55,7 +82,12 @@ export default function ChatPage({ onBack }: Props) {
       const data = await res.json();
 
       const newStep: string  = data.current_step ?? 'greeting';
-      const msgText: string  = data.message ?? '';
+      const assistantMessages: string[] = data.messages?.length
+        ? data.messages
+        : data.message
+        ? [data.message]
+        : [];
+      const msgText = assistantMessages.join('\n\n');
 
       // Update session ID (first call generates it server-side too)
       sessionIdRef.current = data.session_id;
@@ -63,29 +95,25 @@ export default function ChatPage({ onBack }: Props) {
       setPdfReady(data.pdf_ready ?? false);
       setPdfFilename(data.pdf_filename ?? null);
 
-      // Parse loan fields from message
-      setLoanData(prev => parseLoanData(msgText, prev));
+      setLoanData(prev => parseLoanData(msgText, prev, data.loan_data ?? {}));
 
-      // Decide which inline card to attach
-      const showLoanOffer = msgText.includes('Your Loan Offer:');
-      const showKYCCard   = msgText.includes('KYC Status: VERIFIED');
-
-      const botMsg: ChatMessage = {
-        id:           genId(),
-        role:         'assistant',
-        content:      msgText,
-        timestamp:    new Date(),
-        showLoanOffer,
-        showKYCCard,
-      };
-      setMessages(prev => [...prev, botMsg]);
+      if (assistantMessages.length) {
+        const timestamp = new Date();
+        const botMessages: ChatMessage[] = assistantMessages.map(content => ({
+          id: genId(),
+          role: 'assistant',
+          content,
+          timestamp,
+        }));
+        setMessages(prev => [...prev, ...botMessages]);
+      }
     } catch {
       setMessages(prev => [
         ...prev,
         {
           id:        genId(),
           role:      'assistant',
-          content:   '⚠️ Connection error. Make sure the backend is running on port 8002.',
+          content:   `⚠️ Connection error. Make sure the LoanBot API is running on ${API_BASE_URL}.`,
           timestamp: new Date(),
         },
       ]);
@@ -94,16 +122,20 @@ export default function ChatPage({ onBack }: Props) {
     }
   }
 
-  async function sendVideoKyc(aadhaarImage: File, liveVideo: File) {
+  sendMessageRef.current = sendMessage;
+
+  async function sendVideoKyc(aadhaarImage: File, signatureImage: File, liveVideo: File, metadata: VideoKycCaptureMeta) {
     if (loading) return;
     setLoading(true);
 
     try {
       const formData = new FormData();
       formData.append('aadhaar_image', aadhaarImage);
+      formData.append('signature_image', signatureImage);
       formData.append('live_video', liveVideo);
+      formData.append('video_meta', JSON.stringify(metadata));
 
-      const res = await fetch(`/api/video-kyc/${sessionIdRef.current}`, {
+      const res = await fetch(apiUrl(`/video-kyc/${sessionIdRef.current}`), {
         method: 'POST',
         body: formData,
       });
@@ -111,28 +143,34 @@ export default function ChatPage({ onBack }: Props) {
       if (!res.ok) throw new Error('Video KYC failed');
 
       const data = await res.json();
-      const msgText: string = data.message ?? 'Video eKYC processed.';
+      const assistantMessages: string[] = data.messages?.length
+        ? data.messages
+        : data.message
+        ? [data.message]
+        : ['Video eKYC processed.'];
+      const msgText = assistantMessages.join('\n\n');
 
       sessionIdRef.current = data.session_id ?? sessionIdRef.current;
       setCurrentStep(data.current_step ?? 'video_kyc');
       setPdfReady(data.pdf_ready ?? false);
       setPdfFilename(data.pdf_filename ?? null);
-      setLoanData(prev => parseLoanData(msgText, prev));
+      setLoanData(prev => parseLoanData(msgText, prev, data.loan_data ?? {}));
 
-      const botMsg: ChatMessage = {
+      const timestamp = new Date();
+      const botMessages: ChatMessage[] = assistantMessages.map(content => ({
         id: genId(),
         role: 'assistant',
-        content: msgText,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, botMsg]);
+        content,
+        timestamp,
+      }));
+      setMessages(prev => [...prev, ...botMessages]);
     } catch {
       setMessages(prev => [
         ...prev,
         {
           id: genId(),
           role: 'assistant',
-          content: '⚠️ Video eKYC upload failed. Please retry with a clear Aadhaar image and a short selfie video.',
+          content: '⚠️ Live Video KYC failed. Please retry with a clear Aadhaar image, signature image, stable lighting, and a centered face.',
           timestamp: new Date(),
         },
       ]);

@@ -3,7 +3,7 @@ import { features } from '../data/features';
 
 export default function FeatureSection() {
   return (
-    <section className="py-32 relative bg-[var(--color-fintech-navy)] overflow-hidden">
+    <section id="why-loanbot" className="py-32 relative bg-[var(--color-fintech-navy)] overflow-hidden">
       {/* Background decorations */}
       <div className="absolute top-0 right-0 w-1/3 h-full bg-gradient-to-l from-[var(--color-dark-base)] to-transparent pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />

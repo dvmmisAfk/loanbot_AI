@@ -1,35 +1,42 @@
-import { useEffect, useState } from 'react';
-import LandingPage from './components/LandingPage';
-import ChatPage from './components/ChatPage';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import LandingPage from './components/LandingPage'
+import ChatPage from './components/ChatPage'
+import Login from './pages/Login'
+import Signup from './pages/Signup'
+import Profile from './pages/Profile'
 
-type Page = 'landing' | 'chat';
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const user = JSON.parse(localStorage.getItem('loanbot_user') || '{}')
+  if (!user?.loggedIn) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
 
-function getInitialPage(): Page {
-  return window.location.pathname === '/chat' ? 'chat' : 'landing';
+function LandingWrapper() {
+  const navigate = useNavigate()
+  const user = JSON.parse(localStorage.getItem('loanbot_user') || '{}')
+  return <LandingPage onApply={() => navigate(user?.loggedIn ? '/chat' : '/login')} />
+}
+
+function ChatWrapper() {
+  const navigate = useNavigate()
+  return <ChatPage onBack={() => navigate('/')} />
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>(getInitialPage);
-
-  function goToChat() {
-    window.history.pushState({}, '', '/chat');
-    setPage('chat');
-    window.scrollTo(0, 0);
-  }
-
-  function goToLanding() {
-    window.history.pushState({}, '', '/');
-    setPage('landing');
-    window.scrollTo(0, 0);
-  }
-
-  // Handle browser back/forward
-  useEffect(() => {
-    const handler = () => setPage(getInitialPage());
-    window.addEventListener('popstate', handler);
-    return () => window.removeEventListener('popstate', handler);
-  }, []);
-
-  if (page === 'chat') return <ChatPage onBack={goToLanding} />;
-  return <LandingPage onApply={goToChat} />;
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingWrapper />} />
+        <Route path="/chat" element={<ChatWrapper />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        } />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
 }

@@ -3,6 +3,7 @@ interface LoanBotLogoProps {
   iconSize?: number;
   showWordmark?: boolean;
   wordmarkSize?: number;
+  onClick?: () => void;
 }
 
 function LoanBotMark({ size }: { size: number }) {
@@ -44,11 +45,20 @@ export default function LoanBotLogo({
   iconSize = 40,
   showWordmark = true,
   wordmarkSize,
+  onClick,
 }: LoanBotLogoProps) {
   const resolvedWordmarkSize = wordmarkSize ?? Math.max(20, Math.round(iconSize * 0.58));
 
   return (
-    <div className={`flex items-center gap-3 ${className}`.trim()} role="img" aria-label="LoanBot AI">
+    <div
+      className={`flex items-center gap-3 ${className}`.trim()}
+      role="img"
+      aria-label="LoanBot AI"
+      onClick={onClick}
+      style={{
+        cursor: onClick ? 'pointer' : 'default',
+      }}
+    >
       <LoanBotMark size={iconSize} />
       {showWordmark && (
         <span

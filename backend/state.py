@@ -8,12 +8,29 @@ class LoanState(TypedDict):
     tenure: Optional[int]
     income: Optional[int]
     emi: Optional[float]
+    emi_ratio: Optional[float]
+    affordability_warning: Optional[bool]
+    risk_factors: Optional[list]
+    approval_reasoning: Optional[str]
+    npa_risk: Optional[str]
+    loan_to_income: Optional[float]
     aadhaar: Optional[str]
     pan: Optional[str]
     kyc_status: Optional[str]
     user_name: Optional[str]
     aadhaar_image: Optional[Any]
+    aadhaar_filename: Optional[str]
+    aadhaar_content_type: Optional[str]
+    signature_image: Optional[Any]
+    signature_filename: Optional[str]
+    signature_content_type: Optional[str]
     video_frames: Optional[Any]
+    video_filename: Optional[str]
+    video_content_type: Optional[str]
+    video_capture_meta: Optional[dict[str, Any]]
+    secure_aadhaar_path: Optional[str]
+    secure_signature_path: Optional[str]
+    secure_video_path: Optional[str]
     video_kyc_status: Optional[str]
     face_match_score: Optional[float]
     liveness_passed: Optional[bool]
@@ -33,12 +50,29 @@ def get_initial_state() -> LoanState:
         "tenure": None,
         "income": None,
         "emi": None,
+        "emi_ratio": None,
+        "affordability_warning": None,
+        "risk_factors": [],
+        "approval_reasoning": None,
+        "npa_risk": None,
+        "loan_to_income": None,
         "aadhaar": None,
         "pan": None,
         "kyc_status": None,
         "user_name": None,
         "aadhaar_image": None,
+        "aadhaar_filename": None,
+        "aadhaar_content_type": None,
+        "signature_image": None,
+        "signature_filename": None,
+        "signature_content_type": None,
         "video_frames": None,
+        "video_filename": None,
+        "video_content_type": None,
+        "video_capture_meta": None,
+        "secure_aadhaar_path": None,
+        "secure_signature_path": None,
+        "secure_video_path": None,
         "video_kyc_status": None,
         "face_match_score": None,
         "liveness_passed": None,

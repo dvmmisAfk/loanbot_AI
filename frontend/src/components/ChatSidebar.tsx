@@ -1,6 +1,7 @@
 import { Check, Lock, RefreshCw, Calculator } from 'lucide-react';
 import type { LoanData } from '../types';
 import { formatINR } from '../types';
+import { clampPercent, getEmiRatioColor, getEmiRatioLabel, getScoreColor, getScorePillLabel } from '../lib/loanMetrics';
 
 interface Props {
   currentStep: string;
@@ -201,6 +202,53 @@ export default function ChatSidebar({ currentStep, loanData }: Props) {
             <div className="mb-4">
               <p className="text-[10px] tracking-widest uppercase mb-0.5" style={{ color: '#8892a4' }}>EMI</p>
               <p className="text-lg font-semibold text-white">₹{formatINR(loanData.emi)}/mo</p>
+            </div>
+          )}
+
+          {loanData.emi_ratio !== undefined && (
+            <div className="mb-4">
+              <p className="text-[10px] tracking-widest uppercase mb-1" style={{ color: '#8892a4' }}>
+                EMI HEALTH
+              </p>
+              <div className="h-1 rounded-full" style={{ background: '#1a2235' }}>
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${clampPercent(loanData.emi_ratio)}%`,
+                    background: getEmiRatioColor(loanData.emi_ratio),
+                  }}
+                />
+              </div>
+              <p className="text-[11px] mt-2 font-semibold" style={{ color: getEmiRatioColor(loanData.emi_ratio) }}>
+                {loanData.emi_ratio.toFixed(1)}% of income
+              </p>
+              <p className="text-[11px]" style={{ color: getEmiRatioColor(loanData.emi_ratio) }}>
+                {loanData.emi_ratio <= 40 ? '✓ ' : '⚠ '}
+                {getEmiRatioLabel(loanData.emi_ratio)}
+              </p>
+            </div>
+          )}
+
+          {loanData.cibil_score !== undefined && (
+            <div className="mb-4">
+              <p className="text-[10px] tracking-widest uppercase mb-1" style={{ color: '#8892a4' }}>
+                CIBIL SCORE
+              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-2xl font-black" style={{ color: getScoreColor(loanData.cibil_score) }}>
+                  {loanData.cibil_score}
+                </p>
+                <span
+                  className="rounded-full px-3 py-1 text-[10px] font-semibold tracking-[0.12em]"
+                  style={{
+                    background: `${getScoreColor(loanData.cibil_score)}22`,
+                    color: getScoreColor(loanData.cibil_score),
+                    border: `1px solid ${getScoreColor(loanData.cibil_score)}44`,
+                  }}
+                >
+                  {getScorePillLabel(loanData.cibil_score)}
+                </span>
+              </div>
             </div>
           )}
 

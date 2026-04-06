@@ -119,7 +119,26 @@ def _coerce_image(image: Any):
     return frame
 
 
-def _decode_video_frames(video_input: Any) -> List[Any]:
+def _video_suffix(filename: Optional[str], content_type: Optional[str]) -> str:
+    extension = os.path.splitext(filename or "")[1].lower()
+    if extension:
+        return extension
+
+    media_type = (content_type or "").lower()
+    if "webm" in media_type:
+        return ".webm"
+    if "ogg" in media_type:
+        return ".ogv"
+    if "quicktime" in media_type:
+        return ".mov"
+    return ".mp4"
+
+
+def _decode_video_frames(
+    video_input: Any,
+    filename: Optional[str] = None,
+    content_type: Optional[str] = None,
+) -> List[Any]:
     cv2, _, _, _, _, _, _, _ = _load_video_kyc_dependencies()
 
     if video_input is None:
@@ -138,7 +157,10 @@ def _decode_video_frames(video_input: Any) -> List[Any]:
         return _read_video_capture(capture)
 
     if isinstance(video_input, bytes):
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as handle:
+        with tempfile.NamedTemporaryFile(
+            suffix=_video_suffix(filename, content_type),
+            delete=False,
+        ) as handle:
             handle.write(video_input)
             temp_path = handle.name
         try:
@@ -440,7 +462,11 @@ def run_video_kyc(state: LoanState) -> LoanState:
         if aadhaar_image is None or video_input is None:
             raise ValueError("Both aadhaar_image and video_frames are required for Video KYC.")
 
-        frames = _decode_video_frames(video_input)
+        frames = _decode_video_frames(
+            video_input,
+            filename=state.get("video_filename"),
+            content_type=state.get("video_content_type"),
+        )
         if not frames:
             raise ValueError("No decodable frames found for Video KYC.")
 

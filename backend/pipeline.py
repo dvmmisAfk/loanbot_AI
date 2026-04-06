@@ -4,9 +4,17 @@ from agents import sales_agent, kyc_agent, credit_agent, sanction_agent
 from video_kyc_agent import video_kyc_agent
 
 
+def has_video_kyc_assets(state: LoanState) -> bool:
+    return (
+        bool(state.get("aadhaar_image"))
+        and bool(state.get("signature_image"))
+        and bool(state.get("video_frames"))
+    )
+
+
 def after_kyc_router(state: LoanState) -> str:
     """After KYC runs: route into video eKYC once assets are ready."""
-    if state.get("current_step") == "video_kyc":
+    if state.get("current_step") == "video_kyc" and has_video_kyc_assets(state):
         return "video_kyc_agent"
     if state.get("current_step") == "credit":
         return "credit_agent"
@@ -33,7 +41,7 @@ def entry_router(state: LoanState) -> str:
     elif step == "kyc":
         return "kyc_agent"
     elif step == "video_kyc":
-        return "video_kyc_agent"
+        return "video_kyc_agent" if has_video_kyc_assets(state) else END
     elif step == "credit":
         return "credit_agent"
     elif step == "sanction":

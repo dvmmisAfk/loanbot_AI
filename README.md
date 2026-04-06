@@ -1,336 +1,460 @@
-# LoanBot AI - Intelligent Loan Processing System
+# LoanBot AI
 
-A full-stack fintech application powered by AI agents that automates the loan approval process through multi-stage workflows: Sales → KYC → Credit Check → Loan Sanction with PDF generation.
+LoanBot AI is an AI-powered personal loan assistant built for Indian NBFC-style workflows. It guides a borrower from first enquiry through affordability screening, KYC, live Video KYC, credit evaluation, and sanction-letter generation inside a chat-first experience.
 
-## 🚀 Features
+## ✨ Key Features
 
-- **Multi-Agent Pipeline**: Orchestrated AI agents handling different stages of loan processing
-  - **Sales Agent**: Collects loan amount, tenure, and income with natural conversation
-  - **KYC Agent**: Verifies identity with Aadhaar and PAN validation
-  - **Credit Agent**: Calculates CIBIL score based on financial metrics
-  - **Sanction Agent**: Generates official PDF sanction letters
+- **Multi-agent backend flow**: Sales → KYC → Video KYC → Credit → Sanction
+- **EMI affordability checks** before credit evaluation
+- **Transparent CIBIL-like scoring** model (300–900) with risk-factor reasoning
+- **Live webcam-based Video KYC** with face alignment and liveness prompts
+- **Rich chat UI** with offer cards, affordability alerts, and credit reports
+- **PDF sanction letters** with financial analysis and NPA risk tagging
+- **Encrypted storage** for sensitive KYC media artifacts
+- **Voice input** supporting Hindi, English, and Hinglish (browser-native, no backend required)
+- **User authentication** with protected profile dashboard
+- **Functional profile dashboard**:
+  - Dashboard tab: Loan overview, journey timeline, EMI countdown
+  - My Loans tab: Active loan details, repayment schedule
+  - Documents tab: Downloadable sanction letter and KYC documents
+  - Settings tab: Profile management (name, email, phone)
+- **Instant logo navigation** — click LoanBot AI logo anywhere to return home
+- **Graceful rate-limit handling** — surfaced as user-friendly messages
 
-- **AI-Powered Conversations**: Uses Groq's LLaMA 3.3 70B for intelligent, context-aware interactions
-- **JSON Mode Processing**: Structured data extraction for reliable decision making
-- **PDF Generation**: Professional sanction letters with branded styling using ReportLab
-- **Real-time Chat UI**: React + Vite frontend with smooth animations
-- **State Management**: LangGraph-based pipeline for robust workflow orchestration
+## What The App Does
 
-## 🏗️ Architecture
+### 1. Sales Agent
 
-```
-Frontend (React/Vite)
-    ↓
-FastAPI Backend
-    ↓
+- Collects loan amount, tenure, and monthly income in natural conversation
+- Calculates EMI using the standard amortization formula
+- Applies affordability checks before moving forward
+- Warns users if EMI-to-income ratio is above recommended limits
+
+### 2. KYC Agent
+
+- Collects and validates borrower name, Aadhaar, and PAN
+- Masks sensitive identity fields before sending data to the frontend
+- Routes verified users into live Video KYC
+
+### 3. Live Video KYC
+
+- Live webcam capture flow with face-positioning guidance
+- Uses browser camera via `navigator.mediaDevices.getUserMedia`
+- Detects: no face, multiple faces, low lighting, unstable position, bad alignment
+- Runs randomized liveness prompts (blink, smile, turn, nod)
+- Auto-records a short clip only when the face is valid
+- Sends recorded video + Aadhaar image to the backend for server-side validation
+
+### 4. Credit Agent
+
+- India-oriented underwriting model producing a CIBIL-equivalent score (300–900)
+- Evaluates income stability, loan-to-income ratio, EMI-to-income ratio, tenure impact, and affordability history
+- Returns `emi_ratio`, `loan_to_income`, `risk_factors`, `approval_reasoning`, `npa_risk`
+- Generates machine-readable credit analysis for the UI
+
+### 5. Sanction Agent
+
+- Generates a branded sanction PDF via ReportLab
+- Includes borrower details, financial analysis, credit summary, and NPA risk
+- Exposes `/download/{filename}` route for approval screen and profile page
+
+### 6. User Dashboard
+
+- **Dashboard**: Overview with key loan metrics, loan journey timeline, EMI countdown
+- **My Loans**: Active loan details, interest rate, tenure, disbursement date, maturity
+- **Documents**: Download sanction letter PDF, access KYC summary (when complete)
+- **Settings**: Edit profile information with one-click save
+
+## Voice Input (Speech-to-Text)
+
+Powered by the browser-native **Web Speech API** — no external service, no audio stored or transmitted.
+
+### Supported Languages
+
+| Mode | Example |
+|---|---|
+| Pure English | "I need a 3 lakh loan for 24 months" |
+| Pure Hindi | "मुझे तीन लाख का लोन चाहिए" |
+| Hinglish | "Mujhe loan lena hai, income 50000 hai" |
+
+### How It Works
+
+1. Tap the mic icon in the chat input bar
+2. A **"Listening…"** indicator appears — speak naturally
+3. Interim transcription appears live inside the input field
+4. When you stop speaking, the final transcript is automatically sent to the chatbot
+5. Tap the mic again to stop early
+
+### Language Selection
+
+Use the language selector next to the mic button to switch between हिंदी (hi-IN), English IN (en-IN), and English US (en-US). The selected language persists for the session.
+
+### Error Handling
+
+| Error | User-Facing Message |
+|---|---|
+| Mic permission denied | "Microphone access denied. Click the lock icon and allow mic access." |
+| No speech detected | "No speech detected. Please try again and speak clearly." |
+| No microphone | "No microphone found. Please connect one and try again." |
+| Network error | "Voice recognition failed. Try typing instead, or use Chrome/Edge with a stable connection." |
+| Unsupported browser | Mic button is shown as disabled |
+
+### Browser Support
+
+| Browser | Support |
+|---|---|
+| Chrome (desktop + Android) | Full support |
+| Edge | Full support |
+| Safari (macOS + iOS) | Via `webkitSpeechRecognition` |
+| Firefox | Not supported (button disabled) |
+
+## Navigation & UX
+
+### Logo Navigation
+- Click the **LoanBot AI** logo from any page to return to the home page
+- Works on:
+  - Landing page
+  - Login/Signup forms
+  - Chat modal
+  - Chat panel
+  - Profile dashboard (both desktop & mobile)
+
+### Profile Dashboard
+- Access via login and navigation to `/profile`
+- **Desktop**: Fixed sidebar with navigation tabs and mobile hamburger menu
+- **Mobile**: Collapsible drawer menu for all navigation
+- **Functional tabs**:
+  - Dashboard: Loan metrics and journey timeline
+  - My Loans: Detailed active loan information
+  - Documents: Download center for loan documents
+  - Settings: Profile editing form
+- **Sign Out**: Clears session and returns to login
+
+## Architecture
+
+```text
+Frontend (React 19 + TypeScript + Vite)
+    |
+    |  /chat, /video-kyc, /download, /verify-face, /submit-signature
+    v
+FastAPI Backend (port 8000)
+    |
+    v
 LangGraph Pipeline
-    ├─ Sales Agent (Groq LLM JSON mode)
-    ├─ KYC Agent (Groq LLM JSON mode)
-    ├─ Credit Agent (Python calculation)
-    └─ Sanction Agent (PDF generation)
-    ↓
-Groq Cloud LLM / ReportLab PDF / State Management
+    |- Sales Agent
+    |- KYC Agent
+    |- Video KYC Agent  (lazy-loads heavy deps: cv2, torch, mediapipe)
+    |- Credit Agent
+    |- Sanction Agent
+    |
+    +-> Groq LLM  (llama-3.1-8b-instant via groq SDK)
+    +-> ReportLab PDF Generation
+    +-> Encrypted Media Storage (Fernet)
+
+Browser STT (Web Speech API — no backend needed)
+    |- useVoiceInput hook
+    |- Language switcher: hi-IN / en-IN / en-US
+    |- Real-time interim transcription
+    +-> Auto-send final transcript to /chat endpoint
 ```
 
-## 📋 Prerequisites
+## Tech Stack
 
-- Python 3.13+
+### Backend
+
+- FastAPI + uvicorn
+- LangGraph
+- Groq (`llama-3.1-8b-instant` via `groq` SDK)
+- ReportLab
+- cryptography (Fernet)
+- OpenCV, MediaPipe, facenet-pytorch, pytesseract *(optional — Video KYC only)*
+
+### Frontend
+
+- React 19 + TypeScript
+- Vite + Tailwind CSS v4
+- Framer Motion
+- Lucide React
+- `@mediapipe/tasks-vision` (CDN, Video KYC)
+- Web Speech API (built-in, no package required)
+
+## Key Backend Files
+
+```text
+backend/
+├── agents.py                # Sales, KYC, Credit, Sanction agent logic
+├── financials.py            # EMI formula and credit-scoring helpers
+├── llm.py                   # Groq LLM client (MODEL = llama-3.1-8b-instant)
+├── main.py                  # FastAPI routes, session management, error handling
+├── pdf_gen.py               # Sanction PDF generation
+├── pipeline.py              # LangGraph routing
+├── secure_storage.py        # Fernet-encrypted storage for KYC artifacts
+├── state.py                 # LoanState schema and defaults
+├── video_kyc_agent.py       # Face match, OCR, liveness evaluation (lazy deps)
+├── test_agents.py           # Full backend flow test
+├── test_financial_logic.py  # Financial profile validation test
+├── test_pdf.py              # PDF generation test
+└── test_setup.py            # Environment/setup test
+```
+
+## Key Frontend Files
+
+```text
+frontend/src/
+├── components/
+│   ├── ChatPage.tsx           # Chat route and API orchestration
+│   ├── ChatPanel.tsx          # Chat UI with voice-integrated input bar
+│   ├── ChatSidebar.tsx        # Live loan metrics sidebar
+│   ├── ApprovalScreen.tsx     # Loan approved screen with PDF download
+│   ├── CreditReportCard.tsx   # AI credit analysis card
+│   ├── AffordabilityAlert.tsx # High EMI-ratio warning card
+│   ├── LoanOfferCard.tsx      # EMI offer breakdown card
+│   ├── KYCCard.tsx            # Identity verification summary card
+│   ├── VoiceButton.tsx        # Animated mic button with language switcher
+│   ├── VideoKYC.tsx           # Live webcam KYC component
+│   └── LandingPage.tsx        # Marketing landing page
+├── hooks/
+│   ├── useVoiceInput.ts       # Web Speech API hook (hi-IN / en-IN / en-US)
+│   ├── useCamera.ts
+│   └── useFaceDetection.ts
+├── lib/
+│   └── api.ts                 # API_BASE_URL and apiUrl() helper
+├── pages/
+│   ├── Login.tsx
+│   ├── Signup.tsx
+│   └── Profile.tsx
+└── types.ts                   # ChatMessage, LoanData, parseLoanData
+```
+
+## Financial Logic
+
+### EMI Formula
+
+```text
+EMI = P × r × (1 + r)^n / ((1 + r)^n − 1)
+where r = 10.5 / (12 × 100) = 0.00875
+```
+
+### Affordability Rules
+
+- `≤ 40%` EMI-to-income: strong
+- `40–50%`: caution, application can proceed
+- `> 50%`: warning — borrower chooses to reduce amount, extend tenure, or proceed
+
+### Credit Score Bands
+
+- `750–900`: Excellent
+- `700–749`: Good
+- `650–699`: Fair / conditional
+- `550–649`: Poor / review
+- `< 550`: Very poor
+
+### NPA Risk Logic
+
+- `LOW`: high score + healthy EMI burden
+- `MEDIUM`: moderate score or moderate EMI burden
+- `HIGH`: weak score or stressed affordability
+
+## API Endpoints
+
+### `POST /chat`
+
+Main conversational endpoint.
+
+Request:
+
+```json
+{
+  "session_id": "optional-uuid",
+  "message": "I need a 3 lakh loan"
+}
+```
+
+Response fields: `session_id`, `messages`, `current_step`, `loan_status`, `pdf_ready`, `pdf_filename`, `loan_data`.
+
+Rate-limit errors from Groq are caught and returned as a friendly message inside `messages` rather than a 500.
+
+### `POST /video-kyc/{session_id}`
+
+Multipart form upload: `aadhaar_image`, `signature_image`, `live_video`, `video_meta` (JSON string), `user_name`.
+
+Returns: `video_kyc_status`, `face_match_score`, `liveness_passed`, `ocr_name`, `ocr_aadhaar`, `kyc_confidence`, `loan_data`.
+
+### `POST /verify-face`
+
+Mock face verification for demo purposes. Marks session as face-verified when a non-empty base64 image is provided.
+
+### `POST /submit-signature`
+
+Stores a base64 signature in the session for PDF embedding.
+
+### `GET /download/{filename}`
+
+Downloads the generated sanction PDF. Path traversal is prevented via `os.path.basename`.
+
+### `DELETE /session/{session_id}`
+
+Clears a session from memory.
+
+### `GET /health`
+
+```json
+{"status": "ok"}
+```
+
+## LoanState Fields
+
+```python
+{
+    "current_step": str,          # greeting / sales / kyc / video_kyc / credit / sanction / done
+    "loan_amount": Optional[int],
+    "tenure": Optional[int],
+    "income": Optional[int],
+    "emi": Optional[float],
+    "emi_ratio": Optional[float],
+    "affordability_warning": Optional[bool],
+    "loan_to_income": Optional[float],
+    "risk_factors": Optional[list],
+    "approval_reasoning": Optional[str],
+    "npa_risk": Optional[str],
+    "name": Optional[str],
+    "aadhaar": Optional[str],
+    "pan": Optional[str],
+    "kyc_status": Optional[str],
+    "video_kyc_status": Optional[str],
+    "face_match_score": Optional[float],
+    "liveness_passed": Optional[bool],
+    "kyc_confidence": Optional[float],
+    "cibil_score": Optional[int],
+    "loan_status": Optional[str],
+    "pdf_path": Optional[str],
+}
+```
+
+## Prerequisites
+
+- Python 3.11+
 - Node.js 18+
-- Groq API Key (from [console.groq.com](https://console.groq.com))
-- Git
+- A **Groq API key** (free tier at console.groq.com — 500k tokens/day on `llama-3.1-8b-instant`)
+- Chrome or Edge for microphone and camera access
+- Tesseract OCR on `PATH` *(optional — only needed for Aadhaar OCR in Video KYC)*
 
-## 🔧 Installation
+## Environment Variables
 
-### Windows Quick Start
-
-1. Open the project in **PowerShell** or **Command Prompt**.
-2. Create a backend environment file:
-   ```powershell
-   Set-Content -Path backend\.env -Value "GROQ_API_KEY=your_groq_api_key_here"
-   ```
-3. Install backend dependencies:
-   ```powershell
-   cd backend
-   py -m pip install -r requirements.txt
-   ```
-4. Install frontend dependencies:
-   ```powershell
-   cd ..\frontend
-   npm install
-   ```
-5. Start the backend:
-   ```powershell
-   cd ..\backend
-   py -m uvicorn main:app --host 127.0.0.1 --port 8002
-   ```
-6. Start the frontend in a second terminal:
-   ```powershell
-   cd frontend
-   npm run dev
-   ```
-7. Open the app at `http://127.0.0.1:5173`.
-
-### Backend Setup
-
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-
-2. Create environment file with Groq API key:
-   ```bash
-   # Create backend/.env
-   GROQ_API_KEY=your_groq_api_key_here
-   ```
-
-3. Install Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Run setup tests to verify everything works:
-   ```bash
-   python test_setup.py
-   ```
-
-### Frontend Setup
-
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-
-2. Install Node dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start development server:
-   ```bash
-   npm run dev
-   ```
-
-## 📦 Environment Variables
-
-Create a `backend/.env` file (already in `.gitignore`):
+Create `backend/.env`:
 
 ```env
-GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+GROQ_API_KEY=your_groq_api_key_here
 ```
 
-Windows PowerShell alternative:
+Optional:
 
-```powershell
-Set-Content -Path backend\.env -Value "GROQ_API_KEY=your_groq_api_key_here"
+```env
+LOANBOT_FERNET_KEY=optional_pre_generated_fernet_key
 ```
 
-## 🎯 Usage
+If `LOANBOT_FERNET_KEY` is not set, the app auto-generates one and stores it in the gitignored secure uploads directory.
 
-### Running the Full Pipeline
+Optional frontend variable (defaults to `http://127.0.0.1:8000`):
 
-```bash
-cd backend
-python test_agents.py
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-This simulates a complete loan conversation:
-1. User requests loan amount (3 lakh), tenure (24 months), income (₹40,000)
-2. System validates KYC (name, Aadhaar, PAN)
-3. Credit check calculates CIBIL score (718 with demo data)
-4. Generates official sanction letter PDF
+## Installation
 
-### Generating Sample PDF
-
-```bash
-cd backend
-python test_pdf.py
-```
-
-Output: `pdfs/test_sanction.pdf`
-
-### Running Setup Tests
-
-```bash
-cd backend
-python test_setup.py
-```
-
-Windows:
+### Backend
 
 ```powershell
 cd backend
-py test_setup.py
+py -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-Verifies:
-- ✅ State module loads correctly
-- ✅ Groq API connection works
-- ✅ JSON mode responses parse correctly
+### Frontend
 
-### Running the Full App
+```powershell
+cd frontend
+npm install
+```
 
-Backend:
+## Running The App
 
-```bash
+### Start Backend
+
+```powershell
 cd backend
-uvicorn main:app --host 127.0.0.1 --port 8002
+.\venv\Scripts\activate
+py -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-Frontend:
+### Start Frontend
 
-```bash
+```powershell
 cd frontend
 npm run dev
 ```
 
-Windows backend command:
+Open:
+
+- Frontend: `http://localhost:5173`
+- Backend: `http://127.0.0.1:8000`
+
+## Tests
+
+### Backend
 
 ```powershell
 cd backend
-py -m uvicorn main:app --host 127.0.0.1 --port 8002
+.\venv\Scripts\activate
+python test_setup.py
+python test_pdf.py
+python test_agents.py
+python test_financial_logic.py
 ```
-
-## 📁 Project Structure
-
-```
-loanbot/
-├── backend/
-│   ├── agents.py              # Sales, KYC, Credit, Sanction agents
-│   ├── pipeline.py            # LangGraph workflow orchestration
-│   ├── llm.py                 # Groq API integration (lazy-loaded)
-│   ├── pdf_gen.py             # ReportLab PDF generation
-│   ├── state.py               # LoanState TypedDict definition
-│   ├── test_agents.py         # Full pipeline conversation test
-│   ├── test_pdf.py            # Standalone PDF generation test
-│   ├── test_setup.py          # Integration tests for setup
-│   ├── requirements.txt       # Python dependencies
-│   ├── .env                   # Environment variables (gitignored)
-│   └── pdfs/                  # Generated sanction letters
-├── frontend/
-│   ├── src/
-│   │   ├── components/        # React components
-│   │   ├── App.jsx            # Main app component
-│   │   └── main.jsx           # Entry point
-│   ├── package.json           # Node dependencies
-│   ├── vite.config.js         # Vite configuration
-│   └── index.html             # HTML template
-├── .gitignore                 # Git ignore rules
-├── README.md                  # This file
-└── .git/                      # Git repository
-```
-
-## 💻 Tech Stack
-
-### Backend
-- **FastAPI**: Modern async web framework
-- **LangGraph**: Multi-agent orchestration
-- **Groq**: LLaMA 3.3 70B LLM API
-- **ReportLab**: PDF generation library
-- **Python-dotenv**: Environment variables
 
 ### Frontend
-- **React 19**: UI framework
-- **Vite**: Build tool & dev server
-- **Tailwind CSS**: Utility-first CSS
-- **Framer Motion**: Animation library
-- **TypeScript**: Type-safe JavaScript
 
-## 🔄 Loan Processing Flow
-
-### Stage 1: Sales (Natural Conversation)
-- Collects: Loan amount, Tenure, Monthly income
-- Calculates: EMI using standard formula
-- Language: Hindi, English, Hinglish
-
-### Stage 2: KYC Verification
-- Collects: Full name, Aadhaar (12 digits), PAN
-- Validates: Format compliance
-- Output: KYC_STATUS = VERIFIED/FAILED
-
-### Stage 3: Credit Check
-- **CIBIL Score Calculation**:
-  - Base: 300 points
-  - Income factor: +90–220 points
-  - Loan-to-income ratio: +40–160 points
-  - Tenure factor: +0–100 points
-  - EMI/Income ratio: +10–70 points
-  - **Range**: 300–900
-
-### Stage 4: Sanction
-- Generates official branded PDF
-- Includes loan summary, terms, borrower details
-- Saves to `pdfs/sanction_{name}.pdf`
-
-## 🧪 Testing
-
-### Integration Tests
-```bash
-cd backend
-python test_setup.py      # Validates setup
-python test_agents.py     # Tests full pipeline
-python test_pdf.py        # Tests PDF generation
+```powershell
+cd frontend
+npm run lint
+npm run build
 ```
 
-### Expected Outputs
+## Example Demo Flow
 
-**test_setup.py**:
-```
-✅ State module works: greeting
-✅ Groq connected: LoanBot ready!
-✅ JSON mode works: {'status': 'ok'}
-🚀 All systems go! Ready to build agents.
-```
+```text
+User (voice or text): "Mujhe 3 lakh ka loan chahiye"
 
-**test_pdf.py**:
-```
-✅ PDF generated: pdfs/test_sanction.pdf
-📄 Open: D:\coding\loanbot\backend\pdfs\test_sanction.pdf
+Sales Agent  →  collects amount, tenure, income; calculates EMI; checks affordability
+KYC Agent    →  captures name, Aadhaar, PAN
+Video KYC    →  live camera, liveness check, submits to backend
+Credit Agent →  generates AI Credit Analysis Report, CIBIL score, risk factors
+Sanction     →  generates PDF; approval screen shown; download available
 ```
 
-## 🤝 Contributing
+## Security Notes
 
-1. Create a feature branch: `git checkout -b feature/your-feature`
-2. Commit changes: `git commit -m "Add feature description"`
-3. Push to remote: `git push origin feature/your-feature`
-4. Open a Pull Request
+- Aadhaar and PAN are masked before being surfaced in the UI (`XXXX-XXXX-1234` / `ABCXXXX234`)
+- KYC media files are stored encrypted at rest using Fernet
+- Sensitive runtime artifacts are kept in gitignored directories
+- Path traversal is blocked on the `/download` route via `os.path.basename`
+- Voice audio is processed entirely on-device — no audio is stored or transmitted
 
-## 📝 API Reference
+## Current Ports
 
-### State Schema (LoanState)
-```python
-{
-    "messages": List[dict],           # Conversation history
-    "current_step": str,              # "greeting", "sales", "kyc", "credit", "sanction", "done"
-    "name": Optional[str],            # Full name (from KYC)
-    "loan_amount": Optional[int],     # Amount in rupees
-    "tenure": Optional[int],          # Months (12, 24, 36)
-    "income": Optional[int],          # Monthly income
-    "emi": Optional[float],           # Calculated EMI
-    "aadhaar": Optional[str],         # 12-digit Aadhaar
-    "pan": Optional[str],             # PAN card number
-    "kyc_status": Optional[str],      # "VERIFIED" or "FAILED"
-    "cibil_score": Optional[int],     # 300–900
-    "loan_status": Optional[str],     # "APPROVED" or "REVIEW"
-    "pdf_path": Optional[str],        # Path to generated PDF
-}
-```
+- Frontend dev server: `5173`
+- Backend API: `8000`
 
-## 🔐 Security Notes
+## Repository
 
-- API keys are stored in `.env` files (git-ignored)
-- Aadhaar/PAN are masked in outputs
-- All secrets excluded from version control
-- Groq client initializes lazily (no API calls until needed)
+- GitHub: [https://github.com/dvmmisAfk/loanbot_AI](https://github.com/dvmmisAfk/loanbot_AI)
 
-## 📄 License
+## License
 
 This project is proprietary and confidential.
 
-## 📞 Support
-
-For issues or questions, please reach out to the development team.
-
 ---
 
-**Last Updated**: April 6, 2026  
-**Repository**: [https://github.com/dvmmisAfk/loanbot_AI](https://github.com/dvmmisAfk/loanbot_AI)
+Last updated: April 7, 2026

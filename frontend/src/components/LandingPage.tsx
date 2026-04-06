@@ -6,13 +6,19 @@ import ProductCards from './ProductCards';
 import FinalCTA from './FinalCTA';
 import TechStack from './TechStack';
 import LoanBotLogo from './LoanBotLogo';
+import { useNavigate } from 'react-router-dom';
 
 interface Props {
   onApply: () => void;
 }
 
 export default function LandingPage({ onApply }: Props) {
+  const navigate = useNavigate();
   const [navVisible, setNavVisible] = useState(false);
+  const loggedInUser = (() => {
+    try { return JSON.parse(localStorage.getItem('loanbot_user') || '{}'); } catch { return {}; }
+  })();
+  const isLoggedIn = !!loggedInUser?.loggedIn;
 
   useEffect(() => {
     const onScroll = () => setNavVisible(window.scrollY >= window.innerHeight);
@@ -42,30 +48,45 @@ export default function LandingPage({ onApply }: Props) {
         <LoanBotLogo iconSize={38} wordmarkSize={24} />
 
         <div className="hidden md:flex gap-8 text-sm font-medium" style={{ color: '#8892a4' }}>
-          <a href="#" className="hover:text-white transition-colors">How It Works</a>
-          <a href="#" className="hover:text-white transition-colors">Why LoanBot</a>
-          <a href="#" className="hover:text-white transition-colors">For NBFCs</a>
-          <a href="#" className="hover:text-white transition-colors">Tech Stack</a>
+          <a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a>
+          <a href="#why-loanbot" className="hover:text-white transition-colors">Why LoanBot</a>
+          <a href="#tech-stack" className="hover:text-white transition-colors">Tech Stack</a>
         </div>
 
-        <div className="flex gap-4">
-          <button
-            className="hidden md:block px-4 py-2 text-sm font-semibold rounded-lg hover:bg-white/5 transition-colors"
-            style={{ color: '#8892a4' }}
-          >
-            NBFC Login
-          </button>
-          <button
-            onClick={onApply}
-            className="px-4 py-2 text-sm font-semibold rounded-lg hover:scale-105 transition-transform"
-            style={{
-              background: '#ffffff',
-              color: '#0B1120',
-              boxShadow: '0 0 16px rgba(255,255,255,0.35)',
-            }}
-          >
-            Apply for Loan
-          </button>
+        <div className="flex gap-4 items-center">
+          {isLoggedIn ? (
+            <button
+              onClick={() => navigate('/profile')}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+              style={{ border: '1px solid rgba(255,255,255,0.1)' }}
+            >
+              <div
+                className="flex items-center justify-center rounded-full text-xs font-bold"
+                style={{
+                  width: '28px', height: '28px',
+                  background: 'linear-gradient(135deg, #6d5ce7, #b8ff4f)',
+                  color: '#fff',
+                }}
+              >
+                {loggedInUser.name?.[0]?.toUpperCase() ?? 'U'}
+              </div>
+              <span className="text-sm font-medium hidden md:block" style={{ color: '#fff' }}>
+                {loggedInUser.name?.split(' ')[0]}
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={onApply}
+              className="px-4 py-2 text-sm font-semibold rounded-lg hover:scale-105 transition-transform"
+              style={{
+                background: '#ffffff',
+                color: '#0B1120',
+                boxShadow: '0 0 16px rgba(255,255,255,0.35)',
+              }}
+            >
+              Apply for Loan
+            </button>
+          )}
         </div>
       </nav>
 

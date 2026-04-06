@@ -2,6 +2,7 @@ import { Download, ShieldCheck } from 'lucide-react';
 import CIBILGauge from './CIBILGauge';
 import type { LoanData } from '../types';
 import { formatINR } from '../types';
+import { apiUrl } from '../lib/api';
 
 interface Props {
   loanData: LoanData;
@@ -26,14 +27,14 @@ export default function ApprovalScreen({ loanData, pdfReady, pdfFilename }: Prop
   function handleDownload() {
     if (!pdfFilename) return;
     const link = document.createElement('a');
-    link.href = `/api/download/${pdfFilename}`;
+    link.href = apiUrl(`/download/${encodeURIComponent(pdfFilename)}`);
     link.download = pdfFilename;
     link.click();
   }
 
   return (
     <div
-      className="flex-1 overflow-y-auto flex flex-col items-center justify-start px-6 py-10"
+      className="flex flex-col items-center justify-start px-6 py-10"
       style={{ background: '#0B1120' }}
     >
       {/* Floating confetti */}
@@ -177,7 +178,7 @@ export default function ApprovalScreen({ loanData, pdfReady, pdfFilename }: Prop
         )}
 
         <p className="text-center text-[13px] mt-3" style={{ color: '#8892a4' }}>
-          Approved in 8 min 32 sec &nbsp;•&nbsp; 0 humans involved
+          Approved in 5 mins &nbsp;•&nbsp; 0 humans involved
         </p>
         <p
           className="text-center mt-1.5 uppercase tracking-[0.1em] text-[11px]"
@@ -185,6 +186,20 @@ export default function ApprovalScreen({ loanData, pdfReady, pdfFilename }: Prop
         >
           🔒 256-BIT BANK GRADE SECURITY
         </p>
+        <button
+          onClick={() => { window.location.href = '/profile'; }}
+          className="w-full mt-4 font-semibold text-sm transition-all hover:brightness-110"
+          style={{
+            background: 'rgba(184,255,79,0.08)',
+            border: '1px solid rgba(184,255,79,0.25)',
+            color: '#b8ff4f',
+            borderRadius: '12px',
+            padding: '14px',
+            cursor: 'pointer',
+          }}
+        >
+          View your dashboard →
+        </button>
       </div>
     </div>
   );

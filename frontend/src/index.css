@@ -20,6 +20,9 @@
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     background-color: var(--color-fintech-navy);
     color: var(--color-primary);
@@ -61,8 +64,36 @@
   50%       { box-shadow: 0 0 55px rgba(74,222,128,0.85); }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 .animate-spin-gauge   { animation: spin-gauge   1s linear infinite; }
 .animate-pulse-dot    { animation: pulse-dot    1.2s ease-in-out infinite; }
 .animate-slide-up     { animation: slide-up     0.25s ease both; }
 .animate-stamp-in     { animation: stamp-in     0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 .animate-glow-pulse   { animation: glow-pulse   2s ease-in-out infinite; }
+
+/* ── Voice / Mic Animations ── */
+
+@keyframes mic-ring {
+  0%   { transform: scale(1);    opacity: 0.6; }
+  100% { transform: scale(2.2);  opacity: 0; }
+}
+
+@keyframes waveform {
+  0%   { height: 3px; }
+  100% { height: 14px; }
+}
+
+@keyframes voice-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(184,255,79,0); }
+  50%       { box-shadow: 0 0 14px 4px rgba(184,255,79,0.35); }
+}
+
+/* listening input glow */
+.voice-input-listening {
+  animation: voice-glow-pulse 1.6s ease-in-out infinite;
+  border-color: rgba(184,255,79,0.5) !important;
+}

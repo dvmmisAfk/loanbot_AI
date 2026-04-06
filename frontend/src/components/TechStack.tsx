@@ -12,7 +12,7 @@ const badges = [
 
 export default function TechStack() {
   return (
-    <section className="py-16 bg-[var(--color-dark-base)] relative overflow-hidden">
+    <section id="tech-stack" className="py-16 bg-[var(--color-dark-base)] relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
       <div className="container mx-auto px-6 text-center">

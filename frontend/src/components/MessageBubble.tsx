@@ -1,18 +1,17 @@
-import type { ChatMessage, LoanData } from '../types';
-import LoanOfferCard from './LoanOfferCard';
-import KYCCard from './KYCCard';
-
 interface Props {
-  msg: ChatMessage;
-  loanData: LoanData;
+  content: string;
+  role: 'user' | 'assistant';
+  timestamp?: Date;
 }
 
-function formatTime(d: Date) {
+function formatTime(d?: Date) {
+  if (!d) return null;
   return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
-export default function MessageBubble({ msg, loanData }: Props) {
-  const isUser = msg.role === 'user';
+export default function MessageBubble({ content, role, timestamp }: Props) {
+  const isUser = role === 'user';
+  const time = formatTime(timestamp);
 
   return (
     <div className={`flex flex-col animate-slide-up ${isUser ? 'items-end' : 'items-start'}`}>
@@ -26,28 +25,14 @@ export default function MessageBubble({ msg, loanData }: Props) {
           borderRadius: isUser ? '18px 18px 4px 18px' : '4px 18px 18px 18px',
         }}
       >
-        {msg.content}
+        {content}
       </div>
 
-      {/* Inline cards — only on bot messages */}
-      {!isUser && msg.showLoanOffer && loanData.loan_amount && loanData.tenure && loanData.emi && (
-        <LoanOfferCard
-          loanAmount={loanData.loan_amount}
-          tenure={loanData.tenure}
-          emi={loanData.emi}
-        />
+      {time && (
+        <span className="text-[10px] mt-1 px-1" style={{ color: '#8892a4' }}>
+          {time}
+        </span>
       )}
-      {!isUser && msg.showKYCCard && loanData.name && loanData.aadhaar && loanData.pan && (
-        <KYCCard
-          name={loanData.name}
-          aadhaar={loanData.aadhaar}
-          pan={loanData.pan}
-        />
-      )}
-
-      <span className="text-[10px] mt-1 px-1" style={{ color: '#8892a4' }}>
-        {formatTime(msg.timestamp)}
-      </span>
     </div>
   );
 }

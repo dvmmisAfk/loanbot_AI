@@ -1,8 +1,46 @@
+import os
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
 from state import get_initial_state
 from pipeline import pipeline
+
+TEST_AADHAAR_IMAGE = os.getenv("TEST_AADHAAR_IMAGE")
+TEST_LIVE_VIDEO = os.getenv("TEST_LIVE_VIDEO")
+
+
+def maybe_run_video_kyc(state):
+    if state.get("current_step") != "video_kyc":
+        return state, False
+
+    if not TEST_AADHAAR_IMAGE or not TEST_LIVE_VIDEO:
+        print("Video eKYC handoff reached.")
+        print("Set TEST_AADHAAR_IMAGE and TEST_LIVE_VIDEO to exercise the full post-KYC flow.")
+        print()
+        return state, False
+
+    if not os.path.exists(TEST_AADHAAR_IMAGE) or not os.path.exists(TEST_LIVE_VIDEO):
+        print("Video eKYC test assets not found.")
+        print(f"TEST_AADHAAR_IMAGE={TEST_AADHAAR_IMAGE}")
+        print(f"TEST_LIVE_VIDEO={TEST_LIVE_VIDEO}")
+        print()
+        return state, False
+
+    with open(TEST_AADHAAR_IMAGE, "rb") as aadhaar_file:
+        state["aadhaar_image"] = aadhaar_file.read()
+    with open(TEST_LIVE_VIDEO, "rb") as live_video_file:
+        state["video_frames"] = live_video_file.read()
+
+    state["user_name"] = state.get("name")
+    state["current_step"] = "video_kyc"
+    state = pipeline.invoke(state)
+
+    print(f"Step: {state['current_step']}")
+    print(f"Video KYC Status: {state.get('video_kyc_status', 'not set')}")
+    print(f"Bot: {state['messages'][-1]['content'][:100]}...")
+    print()
+
+    return state, True
 
 
 def simulate_conversation():
@@ -76,14 +114,21 @@ def simulate_conversation():
     print(f"Bot: {state['messages'][-1]['content'][:100]}...")
     print()
 
+    state, attempted_video_kyc = maybe_run_video_kyc(state)
+
     print(f"CIBIL Score: {state.get('cibil_score', 'not set')}")
     print(f"Loan Status: {state.get('loan_status', 'not set')}")
     print()
 
     print("=" * 50)
 
-    if state.get("loan_status") in ["APPROVED", "REVIEW"]:
-        print("✅ Pipeline working correctly!")
+    if attempted_video_kyc:
+        if state.get("loan_status") in ["APPROVED", "REVIEW"]:
+            print("✅ Full pipeline working correctly!")
+        else:
+            print("❌ Video eKYC did not advance into credit/sanction. Check outputs above.")
+    elif state.get("current_step") == "video_kyc":
+        print("✅ Core conversation flow working correctly through video eKYC handoff!")
     else:
         print("❌ Something went wrong — check agent outputs above")
 

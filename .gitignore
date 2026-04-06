@@ -3,6 +3,8 @@ backend/venv/
 backend/__pycache__/
 backend/*.pyc
 backend/pdfs/
+backend/*.log
+backend/secure_uploads/
 __pycache__/
 *.pyc
 *.pyo
@@ -16,6 +18,8 @@ frontend/node_modules/
 
 # Build output
 frontend/dist/
+frontend/*.log
+pdfs/
 
 # Claude config
 .claude/
