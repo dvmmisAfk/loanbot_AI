@@ -1,8 +1,7 @@
-from typing import TypedDict, Optional, List, Annotated
-import operator
+from typing import TypedDict, Optional, List
 
 class LoanState(TypedDict):
-    messages: Annotated[List[dict], operator.add]
+    messages: List[dict]
     current_step: str
     name: Optional[str]
     loan_amount: Optional[int]

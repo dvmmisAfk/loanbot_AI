@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Paperclip, Mic, Send } from 'lucide-react';
+import { Mic, Send } from 'lucide-react';
 import type { ChatMessage, LoanData } from '../types';
 import MessageBubble from './MessageBubble';
 import CreditLoadingCard from './CreditLoadingCard';
@@ -127,8 +127,6 @@ export default function ChatPanel({
                 borderRadius: '50px',
               }}
             >
-              {/* Attachment icon */}
-              <Paperclip className="w-5 h-5 shrink-0" style={{ color: '#8892a4' }} />
 
               {/* Text input */}
               <input

@@ -13,22 +13,23 @@ function genId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+// Module-level guard — survives Strict Mode's double-invocation of effects
+let _greetingSent = false;
+
 export default function ChatPage({ onBack }: Props) {
   const [messages,    setMessages]    = useState<ChatMessage[]>([]);
-  const [sessionId,   setSessionId]   = useState<string>(genId());
+  const sessionIdRef  = useRef<string>(genId());
   const [currentStep, setCurrentStep] = useState('greeting');
   const [loanData,    setLoanData]    = useState<LoanData>({});
   const [loading,     setLoading]     = useState(false);
   const [pdfReady,    setPdfReady]    = useState(false);
   const [pdfFilename, setPdfFilename] = useState<string | null>(null);
-  const started = useRef(false);
 
-  // Auto-greet on mount
+  // Auto-greet on mount — guard prevents double-fire in React Strict Mode
   useEffect(() => {
-    if (!started.current) {
-      started.current = true;
-      sendMessage('Hello', true);
-    }
+    if (_greetingSent) return;
+    _greetingSent = true;
+    sendMessage('Hello', true);
   }, []);
 
   async function sendMessage(text: string, isGreeting = false) {
@@ -48,7 +49,7 @@ export default function ChatPage({ onBack }: Props) {
       const res = await fetch('/api/chat', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ session_id: sessionId, message: text }),
+        body:    JSON.stringify({ session_id: sessionIdRef.current, message: text }),
       });
       if (!res.ok) throw new Error('Network error');
       const data = await res.json();
@@ -57,7 +58,7 @@ export default function ChatPage({ onBack }: Props) {
       const msgText: string  = data.message ?? '';
 
       // Update session ID (first call generates it server-side too)
-      setSessionId(data.session_id);
+      sessionIdRef.current = data.session_id;
       setCurrentStep(newStep);
       setPdfReady(data.pdf_ready ?? false);
       setPdfFilename(data.pdf_filename ?? null);

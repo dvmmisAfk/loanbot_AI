@@ -46,21 +46,29 @@ export default function HeroCanvasAnimation({ scrollYProgress }: Props) {
     const context = canvas.getContext('2d');
     if (!context) return;
 
+    // Size canvas to its CSS container
+    const resize = () => {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
     let animationFrameId: number;
 
     const render = () => {
       const currentFrameIndex = Math.max(0, Math.min(TOTAL_FRAMES - 1, Math.round(frameIndex.get())));
       const img = images[currentFrameIndex];
       
-      if (img) {
-        if (canvas.width !== img.width || canvas.height !== img.height) {
-          canvas.width = img.width;
-          canvas.height = img.height;
-        }
-        
-        // Clear canvas
+      if (img && canvas.width > 0 && canvas.height > 0) {
         context.clearRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(img, 0, 0);
+        // Scale image to fill canvas while preserving aspect ratio (cover behaviour)
+        const scale = Math.max(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight);
+        const drawW = img.naturalWidth * scale;
+        const drawH = img.naturalHeight * scale;
+        const offsetX = (canvas.width - drawW) / 2;
+        const offsetY = (canvas.height - drawH) / 2;
+        context.drawImage(img, offsetX, offsetY, drawW, drawH);
       }
       
       animationFrameId = requestAnimationFrame(render);
@@ -68,7 +76,10 @@ export default function HeroCanvasAnimation({ scrollYProgress }: Props) {
 
     render();
 
-    return () => cancelAnimationFrame(animationFrameId);
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('resize', resize);
+    };
   }, [images, loaded, frameIndex]);
 
 
@@ -90,7 +101,7 @@ export default function HeroCanvasAnimation({ scrollYProgress }: Props) {
       )}
       <canvas
         ref={canvasRef}
-        className="w-full h-full object-cover object-left -scale-x-100"
+        style={{ width: '100%', height: '100%', transform: 'scaleX(-1)', display: 'block' }}
       />
     </div>
   );
