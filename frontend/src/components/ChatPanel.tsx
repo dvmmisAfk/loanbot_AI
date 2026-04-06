@@ -37,6 +37,16 @@ export default function ChatPanel({
     inputRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    if (loading || isDone) return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [loading, isDone, messages.length]);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!input.trim() || loading || isDone) return;

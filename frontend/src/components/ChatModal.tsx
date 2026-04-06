@@ -53,6 +53,16 @@ export default function ChatModal({ isOpen, onClose }: ChatModalProps) {
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || loading || currentStep === 'done') return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [isOpen, loading, currentStep, messages.length]);
+
   async function sendMessage(text: string) {
     if (!text.trim() || loading) return;
 
