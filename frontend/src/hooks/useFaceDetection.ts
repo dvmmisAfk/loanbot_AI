@@ -5,7 +5,7 @@ const MEDIAPIPE_WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision
 const FACE_LANDMARKER_MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
-export type LivenessPrompt = 'blink' | 'smile' | 'turn_side' | 'nod';
+export type LivenessPrompt = 'turn_left' | 'turn_right';
 
 export interface FaceBox {
   x: number;
@@ -34,10 +34,8 @@ export interface FaceDetectionState {
 }
 
 const EMPTY_ACTION_STATE: Record<LivenessPrompt, boolean> = {
-  blink: false,
-  smile: false,
-  turn_side: false,
-  nod: false,
+  turn_left: false,
+  turn_right: false,
 };
 
 const INITIAL_STATE: FaceDetectionState = {
@@ -138,11 +136,8 @@ export function useFaceDetection(videoRef: RefObject<HTMLVideoElement | null>, a
   const historyRef = useRef<Array<{ x: number; y: number; area: number }>>([]);
   const poseHistoryRef = useRef<Array<{ yaw: number; pitch: number }>>([]);
   const actionStateRef = useRef<Record<LivenessPrompt, boolean>>(cloneActionState());
-  const blinkArmedRef = useRef(false);
-
   const resetActionHistory = useCallback(() => {
     actionStateRef.current = cloneActionState();
-    blinkArmedRef.current = false;
     poseHistoryRef.current = [];
     setState((current) => ({
       ...current,
@@ -155,7 +150,6 @@ export function useFaceDetection(videoRef: RefObject<HTMLVideoElement | null>, a
       historyRef.current = [];
       poseHistoryRef.current = [];
       actionStateRef.current = cloneActionState();
-      blinkArmedRef.current = false;
       return;
     }
 
@@ -258,46 +252,11 @@ export function useFaceDetection(videoRef: RefObject<HTMLVideoElement | null>, a
           const yaw = (noseTip.x - eyeMidX) / eyeDistance;
           const pitch = (noseTip.y - eyeMidY) / faceHeight;
 
-          poseHistoryRef.current.push({ yaw, pitch });
-          if (poseHistoryRef.current.length > 20) {
-            poseHistoryRef.current.shift();
+          if (yaw > 0.05) {
+            actionStateRef.current.turn_left = true;
           }
-
-          const categories = detection.faceBlendshapes[0]?.categories ?? [];
-          const blendshapeScores = new Map<string, number>();
-          categories.forEach((category) => {
-            blendshapeScores.set(category.categoryName, category.score);
-          });
-
-          const blinkScore = (
-            (blendshapeScores.get('eyeBlinkLeft') ?? 0) +
-            (blendshapeScores.get('eyeBlinkRight') ?? 0)
-          ) / 2;
-          if (blinkScore < 0.15) {
-            blinkArmedRef.current = true;
-          }
-          if (blinkArmedRef.current && blinkScore > 0.42) {
-            actionStateRef.current.blink = true;
-          }
-
-          const smileScore = (
-            (blendshapeScores.get('mouthSmileLeft') ?? 0) +
-            (blendshapeScores.get('mouthSmileRight') ?? 0)
-          ) / 2;
-          if (smileScore > 0.5) {
-            actionStateRef.current.smile = true;
-          }
-
-          if (Math.abs(yaw) > 0.12) {
-            actionStateRef.current.turn_side = true;
-          }
-
-          if (poseHistoryRef.current.length >= 6) {
-            const pitchValues = poseHistoryRef.current.map((sample) => sample.pitch);
-            const pitchRange = Math.max(...pitchValues) - Math.min(...pitchValues);
-            if (pitchRange > 0.05) {
-              actionStateRef.current.nod = true;
-            }
+          if (yaw < -0.05) {
+            actionStateRef.current.turn_right = true;
           }
 
           const qualityIssues: string[] = [];

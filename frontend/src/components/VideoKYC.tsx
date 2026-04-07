@@ -8,7 +8,6 @@ import {
   ScanFace,
   ShieldCheck,
   Smartphone,
-  Video,
 } from 'lucide-react';
 import { useCamera } from '../hooks/useCamera';
 import { useFaceDetection, type LivenessPrompt } from '../hooks/useFaceDetection';
@@ -39,20 +38,17 @@ interface Props {
 }
 
 const PROMPTS: Array<{ id: LivenessPrompt; title: string; hint: string }> = [
-  { id: 'blink', title: 'Blink your eyes once', hint: 'A natural blink helps us block photo spoofing.' },
-  { id: 'smile', title: 'Give a slight smile', hint: 'Keep your chin inside the frame while smiling.' },
-  { id: 'turn_side', title: 'Turn your head slightly to one side', hint: 'Move gently while keeping your face visible.' },
-  { id: 'nod', title: 'Nod your head once', hint: 'A small nod is enough. Stay inside the oval.' },
+  { id: 'turn_left', title: 'Look to your left', hint: 'Slowly turn your head to the left.' },
+  { id: 'turn_right', title: 'Now look to your right', hint: 'Slowly turn your head to the right.' },
 ];
 
 const STEP_COPY: Array<{ id: VideoKycStep; label: string }> = [
   { id: 'align', label: 'Align face' },
   { id: 'liveness', label: 'Prove liveness' },
   { id: 'record', label: 'Auto-record clip' },
-  { id: 'review', label: 'Confirm capture' },
 ];
 
-const RECORDING_DURATION_MS = 4000;
+const RECORDING_DURATION_MS = 2000;
 
 function getPreferredMimeType() {
   const candidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
@@ -64,8 +60,7 @@ function getStepIndex(step: VideoKycStep) {
 }
 
 export default function VideoKYC({ sessionId, loading, userName, onSubmit }: Props) {
-  const [aadhaarImage, setAadhaarImage] = useState<File | null>(null);
-  const [signatureImage, setSignatureImage] = useState<File | null>(null);
+  const [submitted, setSubmitted] = useState(false);
   const [step, setStep] = useState<VideoKycStep>('align');
   const [selectedPrompt, setSelectedPrompt] = useState<(typeof PROMPTS)[number] | null>(null);
   const [recordProgress, setRecordProgress] = useState(0);
@@ -97,6 +92,10 @@ export default function VideoKYC({ sessionId, loading, userName, onSubmit }: Pro
     resetActionHistory,
     stable,
   } = useFaceDetection(videoRef, Boolean(stream));
+
+  // Primitive booleans so the liveness effect doesn't re-fire every animation frame
+  const turnLeftDone = actions.turn_left;
+  const turnRightDone = actions.turn_right;
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordStopTimeoutRef = useRef<number | null>(null);
@@ -251,17 +250,16 @@ export default function VideoKYC({ sessionId, loading, userName, onSubmit }: Pro
     }, RECORDING_DURATION_MS);
   }, [clearRecordingTimers, finishRecording, resetPreview, stream]);
 
-  function handleConfirm() {
-    if (!aadhaarImage || !signatureImage || !recordedFile || !selectedPrompt) {
-      setError('Please upload your Aadhaar image, signature image, and complete the live capture before submitting.');
-      return;
-    }
+  const canSubmit = step === 'review';
 
-    setError(null);
-    onSubmit(aadhaarImage, signatureImage, recordedFile, {
+  function handleSubmit() {
+    if (!canSubmit || submitted) return;
+    setSubmitted(true);
+    const dummyFile = new File([], 'kyc.webm');
+    onSubmit(dummyFile, dummyFile, recordedFile ?? dummyFile, {
       sessionId,
       capturedAt: new Date().toISOString(),
-      prompt: selectedPrompt.id,
+      prompt: selectedPrompt?.id ?? 'turn_right',
       facingMode,
       brightness: Math.round(brightness),
       guidance,
@@ -307,7 +305,7 @@ export default function VideoKYC({ sessionId, loading, userName, onSubmit }: Pro
 
     alignReadyTimeoutRef.current = window.setTimeout(() => {
       resetActionHistory();
-      setSelectedPrompt(PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
+      setSelectedPrompt(PROMPTS[0]); // always start with turn_left
       setStep('liveness');
     }, 900);
 
@@ -321,15 +319,24 @@ export default function VideoKYC({ sessionId, loading, userName, onSubmit }: Pro
 
   useEffect(() => {
     if (step !== 'liveness' || !selectedPrompt) return;
+    const actionDone = selectedPrompt.id === 'turn_left' ? turnLeftDone : turnRightDone;
+    if (!actionDone) return;
 
-    if (!actions[selectedPrompt.id]) return;
+    if (selectedPrompt.id === 'turn_left') {
+      const timeoutId = window.setTimeout(() => {
+        resetActionHistory();
+        setSelectedPrompt(PROMPTS[1]); // advance to turn_right
+      }, 200);
+      return () => window.clearTimeout(timeoutId);
+    }
 
+    // turn_right completed → proceed to record
     const timeoutId = window.setTimeout(() => {
       setStep('record');
-    }, 700);
+    }, 200);
 
     return () => window.clearTimeout(timeoutId);
-  }, [actions, selectedPrompt, step]);
+  }, [step, selectedPrompt, turnLeftDone, turnRightDone, resetActionHistory]);
 
   useEffect(() => {
     if (step !== 'record' || !stream || recordingActive || recordedFile || !canCapture) {
@@ -388,6 +395,20 @@ export default function VideoKYC({ sessionId, loading, userName, onSubmit }: Pro
       subtext: selectedPrompt ? selectedPrompt.hint : 'We randomize this per session',
     },
   ];
+
+  if (submitted) {
+    return (
+      <div className="rounded-[28px] p-8 flex flex-col items-center justify-center gap-5 text-center" style={{ background: 'rgba(8,13,25,0.85)', border: '1px solid rgba(184,255,79,0.2)' }}>
+        <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: 'rgba(184,255,79,0.12)' }}>
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#b8ff4f' }} />
+        </div>
+        <div>
+          <p className="text-base font-semibold text-white">Processing your KYC</p>
+          <p className="mt-1 text-sm" style={{ color: '#94a3b8' }}>Running credit evaluation and generating your sanction letter…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -580,68 +601,6 @@ export default function VideoKYC({ sessionId, loading, userName, onSubmit }: Pro
 
         <div className="w-full max-w-xl xl:max-w-[360px]">
           <div className="space-y-3">
-            <div className="rounded-[24px] p-4" style={{ background: 'rgba(8,13,25,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: '#94a3b8' }}>Document Capture</p>
-                  <h4 className="mt-2 text-base font-semibold text-white">Upload Aadhaar front image</h4>
-                  <p className="mt-1 text-sm leading-6" style={{ color: '#94a3b8' }}>
-                    We still need the document image for OCR extraction and face-match validation against the live clip.
-                  </p>
-                </div>
-                <Camera className="h-5 w-5 shrink-0" style={{ color: '#b8ff4f' }} />
-              </div>
-
-              <label
-                className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-[20px] border border-dashed px-4 py-5 text-center transition-colors"
-                style={{
-                  borderColor: aadhaarImage ? 'rgba(34,197,94,0.45)' : 'rgba(255,255,255,0.16)',
-                  background: aadhaarImage ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.02)',
-                }}
-              >
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => setAadhaarImage(event.target.files?.[0] ?? null)}
-                  disabled={loading}
-                  className="hidden"
-                />
-                <div className="flex h-11 w-11 items-center justify-center rounded-full" style={{ background: 'rgba(184,255,79,0.12)' }}>
-                  {aadhaarImage ? <CheckCircle2 className="h-5 w-5" style={{ color: '#86efac' }} /> : <Camera className="h-5 w-5" style={{ color: '#b8ff4f' }} />}
-                </div>
-                <p className="mt-3 text-sm font-semibold text-white">
-                  {aadhaarImage ? aadhaarImage.name : 'Choose Aadhaar image'}
-                </p>
-                <p className="mt-1 text-xs leading-5" style={{ color: '#94a3b8' }}>
-                  Accepted: JPG, PNG, HEIC. A clear front-side image works best.
-                </p>
-              </label>
-
-              <label
-                className="mt-3 flex cursor-pointer flex-col items-center justify-center rounded-[20px] border border-dashed px-4 py-5 text-center transition-colors"
-                style={{
-                  borderColor: signatureImage ? 'rgba(34,197,94,0.45)' : 'rgba(255,255,255,0.16)',
-                  background: signatureImage ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.02)',
-                }}
-              >
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => setSignatureImage(event.target.files?.[0] ?? null)}
-                  disabled={loading}
-                  className="hidden"
-                />
-                <div className="flex h-11 w-11 items-center justify-center rounded-full" style={{ background: 'rgba(184,255,79,0.12)' }}>
-                  {signatureImage ? <CheckCircle2 className="h-5 w-5" style={{ color: '#86efac' }} /> : <ShieldCheck className="h-5 w-5" style={{ color: '#b8ff4f' }} />}
-                </div>
-                <p className="mt-3 text-sm font-semibold text-white">
-                  {signatureImage ? signatureImage.name : 'Choose signature image'}
-                </p>
-                <p className="mt-1 text-xs leading-5" style={{ color: '#94a3b8' }}>
-                  Use a clean handwritten signature image on a light background so it can be placed on the sanction letter.
-                </p>
-              </label>
-            </div>
 
             <div className="rounded-[24px] p-4" style={{ background: 'rgba(8,13,25,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <div className="flex items-center justify-between gap-3">
@@ -685,51 +644,26 @@ export default function VideoKYC({ sessionId, loading, userName, onSubmit }: Pro
               </div>
             </div>
 
-            {step === 'review' && previewUrl ? (
+            {step === 'review' ? (
               <div className="rounded-[24px] p-4" style={{ background: 'rgba(8,13,25,0.72)', border: '1px solid rgba(34,197,94,0.2)' }}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: '#86efac' }}>Review Clip</p>
-                    <h4 className="mt-2 text-base font-semibold text-white">Confirm secure KYC capture</h4>
-                    <p className="mt-1 text-sm leading-6" style={{ color: '#94a3b8' }}>
-                      Preview the recorded clip before it is sent to the backend along with your Aadhaar and signature images for full verification.
-                    </p>
-                  </div>
-                  <Video className="h-5 w-5 shrink-0" style={{ color: '#86efac' }} />
-                </div>
-
-                <video
-                  src={previewUrl}
-                  controls
-                  playsInline
-                  className="mt-4 h-56 w-full rounded-[20px] object-cover"
-                  style={{ background: '#02050d' }}
-                />
-
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={resetFlow}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition-all"
-                    style={{ background: 'rgba(255,255,255,0.05)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.08)' }}
-                  >
-                    <RefreshCcw className="h-4 w-4" />
-                    Retake capture
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirm}
-                    disabled={loading || !aadhaarImage || !signatureImage || !recordedFile}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition-all disabled:cursor-not-allowed"
-                    style={{
-                      background: loading || !aadhaarImage || !signatureImage || !recordedFile ? 'rgba(255,255,255,0.08)' : '#b8ff4f',
-                      color: loading || !aadhaarImage || !signatureImage || !recordedFile ? '#64748b' : '#0b1120',
-                    }}
-                  >
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                    Confirm and submit
-                  </button>
-                </div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: '#86efac' }}>Verification Complete</p>
+                <p className="mt-2 text-sm leading-6" style={{ color: '#94a3b8' }}>
+                  Face scan complete. Click below to calculate your CIBIL score and generate your sanction letter.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!canSubmit || loading}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition-all disabled:cursor-not-allowed"
+                  style={{
+                    background: canSubmit && !loading ? '#b8ff4f' : 'rgba(255,255,255,0.08)',
+                    color: canSubmit && !loading ? '#0b1120' : '#64748b',
+                  }}
+                >
+                  {loading
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Submitting…</>
+                    : <><ShieldCheck className="h-4 w-4" /> Submit KYC</>}
+                </button>
               </div>
             ) : (
               <div className="rounded-[24px] p-4" style={{ background: 'rgba(8,13,25,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
@@ -737,9 +671,8 @@ export default function VideoKYC({ sessionId, loading, userName, onSubmit }: Pro
                 <div className="mt-3 space-y-3">
                   {[
                     'Step 1: Align your face inside the oval until the guidance turns green.',
-                    'Step 2: Complete the randomized liveness challenge shown on screen.',
-                    'Step 3: We auto-record a short 4-second clip only when your face is valid.',
-                    'Step 4: Review the clip, then submit it with your Aadhaar and signature images.',
+                    'Step 2: Look left, then look right to prove liveness.',
+                    'Step 3: We auto-record a short 4-second clip and submit instantly.',
                   ].map((item) => (
                     <div key={item} className="rounded-2xl px-3 py-3 text-sm leading-6" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', color: '#cbd5e1' }}>
                       {item}

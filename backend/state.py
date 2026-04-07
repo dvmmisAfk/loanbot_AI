@@ -4,6 +4,8 @@ class LoanState(TypedDict):
     messages: List[dict]
     current_step: str
     name: Optional[str]
+    loan_type: Optional[str]
+    interest_rate: Optional[float]
     loan_amount: Optional[int]
     tenure: Optional[int]
     income: Optional[int]
@@ -46,6 +48,8 @@ def get_initial_state() -> LoanState:
         "messages": [],
         "current_step": "greeting",
         "name": None,
+        "loan_type": None,
+        "interest_rate": None,
         "loan_amount": None,
         "tenure": None,
         "income": None,

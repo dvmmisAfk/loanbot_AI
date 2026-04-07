@@ -14,21 +14,48 @@ from state import LoanState
 
 # ─────────────────────────────────────
 # AGENT 1: SALES AGENT
-# Collects: loan_amount, tenure, income
-# Calculates: EMI
+# Collects: loan_type, loan_amount, tenure, income
+# Calculates: EMI using loan-type interest rate
 # Transitions to: kyc
 # ─────────────────────────────────────
+
+LOAN_TYPE_RATES: dict[str, float] = {
+    "personal":  14.0,
+    "home":       8.5,
+    "car":        9.5,
+    "education":  9.0,
+    "business":  16.0,
+    "gold":      11.0,
+}
+
+LOAN_TYPE_DISPLAY: dict[str, str] = {
+    "personal":  "Personal Loan",
+    "home":      "Home Loan",
+    "car":       "Car / Vehicle Loan",
+    "education": "Education Loan",
+    "business":  "Business Loan",
+    "gold":      "Gold Loan",
+}
 
 SALES_PROMPT = """You are Riya, a warm and friendly loan sales
 assistant for QuickLoan NBFC — a trusted Indian lending company.
 
-YOUR ONLY JOB: Collect exactly 3 things from the customer:
-1. loan_amount — how much money they want in rupees
-2. tenure — repayment period in months (12, 24, or 36 only)
-3. income — their monthly income in rupees
+YOUR ONLY JOB: Collect exactly 4 things from the customer:
+1. loan_type — type of loan (personal / home / car / education / business / gold)
+2. loan_amount — how much money they want in rupees
+3. tenure — repayment period in months (12, 24, or 36 only)
+4. income — their monthly income in rupees
+
+INTEREST RATES BY LOAN TYPE (use these for EMI calculation):
+  personal  → 14.0% p.a.
+  home      →  8.5% p.a.
+  car       →  9.5% p.a.
+  education →  9.0% p.a.
+  business  → 16.0% p.a.
+  gold      → 11.0% p.a.
 
 STRICT RULES:
-- Greet the customer warmly on first message
+- Greet the customer warmly on first message, then ask what type of loan they need
 - Speak naturally — match their language (Hindi, English, Hinglish)
 - Ask for ONE missing thing at a time, never multiple questions
 - Be encouraging and empathetic — this is their financial dream
@@ -39,8 +66,8 @@ STRICT RULES:
 
 FINANCIAL KNOWLEDGE YOU MUST USE:
 
-When a user gives you income and loan amount, mentally calculate:
-  EMI using: P * r * (1+r)^n / ((1+r)^n - 1) where r = 0.00875
+Once you know the loan_type, use its interest rate r_monthly = annual_rate / 1200
+  EMI = P * r * (1+r)^n / ((1+r)^n - 1)
   EMI-to-income ratio = (EMI / income) * 100
 
 If EMI ratio > 50%: warn the user before proceeding.
@@ -48,15 +75,12 @@ If EMI ratio 40-50%: note it's slightly above recommended.
 If EMI ratio < 40%: confirm it's within safe range.
 
 Explain like a real loan advisor — not a robot.
-Example: "Your EMI would be Rs. 13,913 — that's about 34% of your
-income, well within the safe zone banks use."
+Example: "For a Car Loan at 9.5%, your EMI would be Rs. 10,450 — that's about 26% of your income, well within the safe zone."
 
-If user seems stressed about affordability, reassure them
-and offer alternatives (lower amount, longer tenure).
-
-WHEN YOU HAVE ALL 3, respond with ONLY this JSON:
+WHEN YOU HAVE ALL 4, respond with ONLY this JSON:
 {
   "done": true,
+  "loan_type": "personal",
   "loan_amount": 300000,
   "tenure": 24,
   "income": 40000,
@@ -111,18 +135,23 @@ def _update_offer_metrics(
     state["loan_amount"] = int(loan_amount if loan_amount is not None else state.get("loan_amount") or 0)
     state["tenure"] = int(tenure if tenure is not None else state.get("tenure") or 24)
     state["income"] = int(income if income is not None else state.get("income") or 0)
-    state["emi"] = calculate_emi(state.get("loan_amount"), state.get("tenure"))
+    rate = state.get("interest_rate") or LOAN_TYPE_RATES.get(state.get("loan_type") or "", 10.5)
+    state["interest_rate"] = rate
+    state["emi"] = calculate_emi(state.get("loan_amount"), state.get("tenure"), rate)
     state["emi_ratio"] = calculate_emi_ratio(state.get("emi"), state.get("income"))
     state["loan_to_income"] = calculate_loan_to_income(state.get("loan_amount"), state.get("income"))
 
 
 def _build_offer_summary(state: LoanState) -> str:
+    loan_type_key = state.get("loan_type") or ""
+    loan_type_label = LOAN_TYPE_DISPLAY.get(loan_type_key, "Loan")
+    rate = state.get("interest_rate") or LOAN_TYPE_RATES.get(loan_type_key, 10.5)
     return (
-        "📋 Your Loan Offer:\n"
+        f"📋 Your {loan_type_label} Offer:\n"
         f"• Amount: {format_inr(state.get('loan_amount', 0))}\n"
         f"• Tenure: {state.get('tenure', 24)} months\n"
         f"• Monthly EMI: {format_inr(state.get('emi', 0))}\n"
-        f"• Interest Rate: 10.5% p.a.\n"
+        f"• Interest Rate: {rate}% p.a.\n"
         f"• EMI-to-income ratio: {state.get('emi_ratio', 0):.1f}%"
     )
 
@@ -251,6 +280,9 @@ def sales_agent(state: LoanState) -> LoanState:
             loan_amount = int(data.get("loan_amount", 0))
             tenure = int(data.get("tenure", 24))
             income = int(data.get("income", 0))
+            loan_type = str(data.get("loan_type", "personal")).lower().strip()
+            state["loan_type"] = loan_type
+            state["interest_rate"] = LOAN_TYPE_RATES.get(loan_type, 10.5)
             _update_offer_metrics(state, loan_amount=loan_amount, tenure=tenure, income=income)
             offer_msg = _finalize_sales_offer(state, intro_message=reply)
             state["messages"].append({
@@ -263,7 +295,7 @@ def sales_agent(state: LoanState) -> LoanState:
                 "content": reply
             })
     except (json.JSONDecodeError, KeyError, ValueError, TypeError):
-        fallback = "Namaste! I am Riya from QuickLoan. How much loan do you need today?"
+        fallback = "Namaste! I am Riya from QuickLoan. What type of loan are you looking for — Personal, Home, Car, Education, Business, or Gold?"
         state["messages"].append({
             "role": "assistant",
             "content": fallback
@@ -646,12 +678,14 @@ def sanction_agent(state: LoanState) -> LoanState:
 
         state["npa_risk"] = calculate_npa_risk(state.get("cibil_score"), state.get("emi_ratio"))
 
-        name = state.get("name", "Applicant")
+        name = state.get("name") or "Applicant"
         safe_name = re.sub(r'[^a-zA-Z0-9]', '_', name)
         pdf_filename = f"sanction_{safe_name}.pdf"
-        pdf_path = os.path.join("pdfs", pdf_filename)
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        pdf_dir = os.path.join(base_dir, "pdfs")
+        pdf_path = os.path.join(pdf_dir, pdf_filename)
 
-        os.makedirs("pdfs", exist_ok=True)
+        os.makedirs(pdf_dir, exist_ok=True)
         generate_pdf(state, pdf_path)
 
         state["pdf_path"] = pdf_path
@@ -679,7 +713,9 @@ def sanction_agent(state: LoanState) -> LoanState:
             "content": final_msg
         })
 
-    except Exception:
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception("sanction_agent failed: %s", exc)
         state["messages"].append({
             "role": "assistant",
             "content": "Your loan is approved! Sanction letter ready for download."

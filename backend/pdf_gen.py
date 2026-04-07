@@ -98,12 +98,12 @@ def generate_pdf(state: dict, path: str) -> str:
     os.makedirs(os.path.dirname(path) if os.path.dirname(path) else '.', exist_ok=True)
 
     # ── Extract state ────────────────────────────────
-    name        = state.get('name', 'Applicant')
-    loan_amount = int(state.get('loan_amount', 0))
-    tenure      = int(state.get('tenure', 24))
-    income      = int(state.get('income', 0))
-    emi         = int(state.get('emi', 0))
-    cibil       = int(state.get('cibil_score', 0))
+    name        = state.get('name') or 'Applicant'
+    loan_amount = int(state.get('loan_amount') or 0)
+    tenure      = int(state.get('tenure') or 24)
+    income      = int(state.get('income') or 0)
+    emi         = int(state.get('emi') or 0)
+    cibil       = int(state.get('cibil_score') or 0)
     loan_status = state.get('loan_status', 'APPROVED')
     kyc_status  = state.get('kyc_status', 'VERIFIED')
     aadhaar     = state.get('aadhaar', '')

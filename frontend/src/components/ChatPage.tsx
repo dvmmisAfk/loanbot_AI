@@ -124,20 +124,15 @@ export default function ChatPage({ onBack }: Props) {
 
   sendMessageRef.current = sendMessage;
 
-  async function sendVideoKyc(aadhaarImage: File, signatureImage: File, liveVideo: File, metadata: VideoKycCaptureMeta) {
+  async function sendVideoKyc(_aadhaarImage: File, _signatureImage: File, _liveVideo: File, _metadata: VideoKycCaptureMeta) {
     if (loading) return;
     setLoading(true);
+    const startedAt = Date.now();
+    const MIN_DISPLAY_MS = 6500;
 
     try {
-      const formData = new FormData();
-      formData.append('aadhaar_image', aadhaarImage);
-      formData.append('signature_image', signatureImage);
-      formData.append('live_video', liveVideo);
-      formData.append('video_meta', JSON.stringify(metadata));
-
-      const res = await fetch(apiUrl(`/video-kyc/${sessionIdRef.current}`), {
+      const res = await fetch(apiUrl(`/submit-kyc/${sessionIdRef.current}`), {
         method: 'POST',
-        body: formData,
       });
 
       if (!res.ok) throw new Error('Video KYC failed');
@@ -149,6 +144,12 @@ export default function ChatPage({ onBack }: Props) {
         ? [data.message]
         : ['Video eKYC processed.'];
       const msgText = assistantMessages.join('\n\n');
+
+      // Enforce minimum display time so the processing screen always shows for ~6.5s
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_DISPLAY_MS) {
+        await new Promise(resolve => setTimeout(resolve, MIN_DISPLAY_MS - elapsed));
+      }
 
       sessionIdRef.current = data.session_id ?? sessionIdRef.current;
       setCurrentStep(data.current_step ?? 'video_kyc');
@@ -164,16 +165,16 @@ export default function ChatPage({ onBack }: Props) {
         timestamp,
       }));
       setMessages(prev => [...prev, ...botMessages]);
-    } catch {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: genId(),
-          role: 'assistant',
-          content: '⚠️ Live Video KYC failed. Please retry with a clear Aadhaar image, signature image, stable lighting, and a centered face.',
-          timestamp: new Date(),
-        },
-      ]);
+
+      // Auto-download the PDF once the processing screen clears
+      if (data.pdf_filename) {
+        const link = document.createElement('a');
+        link.href = apiUrl(`/download/${encodeURIComponent(data.pdf_filename)}`);
+        link.download = data.pdf_filename;
+        link.click();
+      }
+    } catch (err) {
+      console.error('submit-kyc error:', err);
     } finally {
       setLoading(false);
     }

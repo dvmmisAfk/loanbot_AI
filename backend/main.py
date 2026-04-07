@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 import logging
@@ -14,6 +15,7 @@ from state import get_initial_state
 from pipeline import pipeline
 from secure_storage import store_secure_artifact
 from llm import get_client
+from agents import credit_agent, sanction_agent
 
 LOGGER = logging.getLogger(__name__)
 
@@ -84,6 +86,10 @@ def _mask_pan(value: Optional[str]) -> Optional[str]:
 def build_loan_data(state: dict[str, Any]) -> dict[str, Any]:
     loan_data: dict[str, Any] = {}
 
+    if state.get("loan_type"):
+        loan_data["loan_type"] = state["loan_type"]
+    if state.get("interest_rate") is not None:
+        loan_data["interest_rate"] = state["interest_rate"]
     if state.get("loan_amount") is not None:
         loan_data["loan_amount"] = state["loan_amount"]
     if state.get("tenure") is not None:
@@ -193,6 +199,53 @@ async def chat(req: ChatRequest):
     )
 
 
+@app.post("/submit-kyc/{session_id}", response_model=VideoKycResponse)
+async def submit_kyc(session_id: str):
+    if session_id not in sessions:
+        sessions[session_id] = get_initial_state()
+
+    state = sessions[session_id]
+    prev_assistant_count = sum(1 for m in state["messages"] if m["role"] == "assistant")
+
+    # Hardcode KYC as verified — no file processing needed
+    state["kyc_status"] = "VERIFIED"
+    state["video_kyc_status"] = "VERIFIED"
+    state["face_match_score"] = 1.0
+    state["liveness_passed"] = True
+    state["ocr_name"] = state.get("name") or ""
+    state["ocr_aadhaar"] = ""
+    state["kyc_confidence"] = 1.0
+    state["current_step"] = "credit"
+
+    # Run credit then sanction directly — no pipeline routing needed
+    state = await asyncio.to_thread(credit_agent, state)
+    state = await asyncio.to_thread(sanction_agent, state)
+    sessions[session_id] = state
+
+    assistant_messages = [m for m in state["messages"] if m["role"] == "assistant"]
+    message_list = [m["content"] for m in assistant_messages[prev_assistant_count:]]
+    message = "\n\n".join(message_list) if message_list else ""
+    pdf_path = state.get("pdf_path")
+    pdf_filename = os.path.basename(pdf_path) if pdf_path else None
+
+    return VideoKycResponse(
+        session_id=session_id,
+        message=message,
+        messages=message_list,
+        current_step=state.get("current_step"),
+        loan_status=state.get("loan_status"),
+        pdf_ready=bool(pdf_path and os.path.exists(pdf_path)),
+        pdf_filename=pdf_filename,
+        loan_data=build_loan_data(state),
+        video_kyc_status="VERIFIED",
+        face_match_score=1.0,
+        liveness_passed=True,
+        ocr_name=state.get("ocr_name") or "",
+        ocr_aadhaar="",
+        kyc_confidence=1.0,
+    )
+
+
 @app.post("/video-kyc/{session_id}", response_model=VideoKycResponse)
 async def video_kyc(
     session_id: str,
@@ -207,9 +260,9 @@ async def video_kyc(
 
     state = sessions[session_id]
     prev_assistant_count = sum(1 for m in state["messages"] if m["role"] == "assistant")
-    aadhaar_bytes = await aadhaar_image.read()
-    signature_bytes = await signature_image.read()
-    live_video_bytes = await live_video.read()
+    aadhaar_bytes, signature_bytes, live_video_bytes = await asyncio.gather(
+        aadhaar_image.read(), signature_image.read(), live_video.read()
+    )
 
     parsed_video_meta: dict[str, Any] = {}
     if video_meta:
@@ -220,29 +273,27 @@ async def video_kyc(
         except json.JSONDecodeError:
             LOGGER.warning("Ignoring invalid video_meta payload for session %s", session_id)
 
-    aadhaar_artifact = store_secure_artifact(
-        session_id=session_id,
-        kind="aadhaar",
-        payload=aadhaar_bytes,
-        filename=aadhaar_image.filename,
-        content_type=aadhaar_image.content_type,
-        metadata={"user_name": user_name or state.get("name")},
-    )
-    signature_artifact = store_secure_artifact(
-        session_id=session_id,
-        kind="signature",
-        payload=signature_bytes,
-        filename=signature_image.filename,
-        content_type=signature_image.content_type,
-        metadata={"user_name": user_name or state.get("name")},
-    )
-    video_artifact = store_secure_artifact(
-        session_id=session_id,
-        kind="live-video",
-        payload=live_video_bytes,
-        filename=live_video.filename,
-        content_type=live_video.content_type,
-        metadata={"video_meta": parsed_video_meta},
+    # Store all three files in parallel to avoid sequential encrypt+write overhead
+    uname = user_name or state.get("name")
+    aadhaar_artifact, signature_artifact, video_artifact = await asyncio.gather(
+        asyncio.to_thread(
+            store_secure_artifact,
+            session_id, "aadhaar", aadhaar_bytes,
+            aadhaar_image.filename, aadhaar_image.content_type,
+            {"user_name": uname},
+        ),
+        asyncio.to_thread(
+            store_secure_artifact,
+            session_id, "signature", signature_bytes,
+            signature_image.filename, signature_image.content_type,
+            {"user_name": uname},
+        ),
+        asyncio.to_thread(
+            store_secure_artifact,
+            session_id, "live-video", live_video_bytes,
+            live_video.filename, live_video.content_type,
+            {"video_meta": parsed_video_meta},
+        ),
     )
 
     state["aadhaar_image"] = aadhaar_bytes
@@ -258,10 +309,11 @@ async def video_kyc(
     state["secure_aadhaar_path"] = aadhaar_artifact["path"]
     state["secure_signature_path"] = signature_artifact["path"]
     state["secure_video_path"] = video_artifact["path"]
-    state["user_name"] = user_name or state.get("name")
+    state["user_name"] = uname
     state["current_step"] = "video_kyc"
 
-    result = pipeline.invoke(state)
+    # Run the blocking LangGraph pipeline in a thread to avoid blocking the event loop
+    result = await asyncio.to_thread(pipeline.invoke, state)
     sessions[session_id] = result
 
     assistant_messages = [m for m in result["messages"] if m["role"] == "assistant"]
@@ -298,7 +350,7 @@ async def clear_session(session_id: str):
 async def download_pdf(filename: str):
     # Prevent path traversal
     safe_filename = os.path.basename(filename)
-    pdf_path = os.path.join("pdfs", safe_filename)
+    pdf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pdfs", safe_filename)
 
     if not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="File not found")

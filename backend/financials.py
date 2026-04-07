@@ -1,7 +1,8 @@
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
-EMI_MONTHLY_RATE = Decimal("10.5") / (Decimal("12") * Decimal("100"))
+DEFAULT_ANNUAL_RATE = Decimal("10.5")
+EMI_MONTHLY_RATE = DEFAULT_ANNUAL_RATE / (Decimal("12") * Decimal("100"))  # kept for back-compat
 
 
 def _to_decimal(value: Optional[float | int | str | Decimal]) -> Decimal:
@@ -33,14 +34,16 @@ def format_inr(amount: Optional[float | int | str | Decimal]) -> str:
     return f"{sign}₹{grouped}"
 
 
-def calculate_emi(loan_amount: Optional[int], tenure: Optional[int]) -> int:
+def calculate_emi(loan_amount: Optional[int], tenure: Optional[int], annual_rate: Optional[float] = None) -> int:
     principal = _to_decimal(loan_amount)
     months = int(tenure or 0)
     if principal <= 0 or months <= 0:
         return 0
 
-    growth = (Decimal("1") + EMI_MONTHLY_RATE) ** months
-    emi = principal * EMI_MONTHLY_RATE * growth / (growth - Decimal("1"))
+    rate = _to_decimal(annual_rate) if annual_rate is not None else DEFAULT_ANNUAL_RATE
+    monthly_rate = rate / (Decimal("12") * Decimal("100"))
+    growth = (Decimal("1") + monthly_rate) ** months
+    emi = principal * monthly_rate * growth / (growth - Decimal("1"))
     return int(_quantize(emi, "1"))
 
 
