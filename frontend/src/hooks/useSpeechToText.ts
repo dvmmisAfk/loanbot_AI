@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { apiUrl } from '../lib/api';
 
 export type STTStatus = 'idle' | 'listening' | 'processing' | 'error';
 
@@ -6,8 +7,6 @@ export interface UseSpeechToTextOptions {
   onTranscript?: (text: string) => void;
   onInterim?:    (text: string) => void;  // kept for API compat; not used in recorder
 }
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
 /**
  * Voice input hook — uses MediaRecorder (built into every browser) to capture
@@ -106,7 +105,7 @@ export function useSpeechToText({ onTranscript }: UseSpeechToTextOptions = {}) {
         const form = new FormData();
         form.append('audio', blob, `recording.${blob.type.includes('ogg') ? 'ogg' : 'webm'}`);
 
-        const res = await fetch(`${API_BASE}/transcribe`, {
+        const res = await fetch(apiUrl('/transcribe'), {
           method: 'POST',
           body: form,
         });
@@ -127,7 +126,8 @@ export function useSpeechToText({ onTranscript }: UseSpeechToTextOptions = {}) {
         }
       } catch (err) {
         console.error('[STT] transcription error:', err);
-        setErrorMessage('Transcription failed. Check backend is running and try again.');
+        const msg = err instanceof Error ? err.message : String(err);
+        setErrorMessage(`Transcription failed: ${msg}`);
         setStatus('error');
       }
     };

@@ -23,11 +23,7 @@ app = FastAPI(title="LoanBot API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173", "http://localhost:5174",
-        "http://127.0.0.1:5173", "http://127.0.0.1:5174",
-        "http://localhost:3000",
-    ],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -409,7 +405,9 @@ async def transcribe(audio: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Empty audio file")
 
     # Determine a safe filename/extension for Groq
-    content_type = audio.content_type or "audio/webm"
+    # Strip codec suffix (e.g. "audio/webm;codecs=opus" → "audio/webm") so Groq accepts it
+    raw_ct = audio.content_type or "audio/webm"
+    content_type = raw_ct.split(";")[0].strip()
     ext = "webm"
     if "ogg" in content_type:
         ext = "ogg"

@@ -36,7 +36,7 @@ LoanBot AI is an AI-powered loan assistant built for Indian NBFC-style workflows
 - Liveness: look **left** then look **right** — detected via yaw angle
 - Auto-records a 2-second clip after liveness passes
 - One-click **Submit KYC** button — no file uploads required for demo
-- 6.5-second processing screen, then PDF auto-downloads
+- Then PDF auto-downloads
 
 ### 4. Credit Agent
 
@@ -90,7 +90,7 @@ FastAPI Backend (port 8001)
 LangGraph Pipeline
     |- Sales Agent      (Groq LLM — llama-3.1-8b-instant)
     |- KYC Agent        (Groq LLM + regex fallback)
-    |- Video KYC Agent  (hardcoded VERIFIED for demo)
+    |- Video KYC Agent  
     |- Credit Agent     (pure Python, no LLM)
     |- Sanction Agent   (ReportLab PDF)
     |

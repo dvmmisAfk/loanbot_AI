@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: loanbot-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: standard          # needs ≥1 GB RAM for torch + mediapipe
+    healthCheckPath: /health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false         # enter this manually in the Render dashboard
